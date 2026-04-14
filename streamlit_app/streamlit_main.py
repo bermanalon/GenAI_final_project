@@ -1,30 +1,35 @@
 import os
 import sys
-import time
+
+import streamlit as st
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-import streamlit as st
-from app.main import bootstrap_app, create_initial_session_state
-from app.modules.chat import get_chatgpt_response
+from app.main import (
+    bootstrap_app,
+    create_initial_session_state,
+    process_user_message,
+)
 
-st.markdown("""
-<style>
-.block-container {
-    padding-top: 1.8rem;
-    padding-bottom: 0.5rem;
-    margin-top: 0;
-    margin-bottom: 0.2rem
-}
-</style>
-""", unsafe_allow_html=True)
 
 st.set_page_config(
     page_title="Recruitment Chatbot",
     page_icon="💼",
-    layout="wide"
+    layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 1.2rem;
+        padding-bottom: 0.6rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -34,9 +39,7 @@ def initialize_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    if "registration_ready_for_chat" not in st.session_state:
-        st.session_state.registration_ready_for_chat = False            
-    
+
 def reset_app():
     defaults = create_initial_session_state()
     st.session_state.clear()
@@ -44,7 +47,7 @@ def reset_app():
         st.session_state[key] = value
 
 
-def validate_registration(first_name: str, last_name: str, email: str, phone_number: str) -> list[str]:
+def validate_registration(first_name, last_name, email, phone_number):
     errors = []
 
     if not first_name.strip():
@@ -59,32 +62,17 @@ def validate_registration(first_name: str, last_name: str, email: str, phone_num
     return errors
 
 
-try:
-    client = bootstrap_app()
-except Exception as e:
-    st.error(f"Startup error: {e}")
-    st.stop()
-
-initialize_session_state()
-
-# -----------------------------
-# Fixed header
-# -----------------------------
-st.markdown("### Recruitment Chatbot")
-
-# -----------------------------
-# Registration screen
-# -----------------------------
-if not st.session_state.registration_submitted:
-    left_spacer, center_col, right_spacer = st.columns([1, 1.6, 1])
+def render_registration_screen():
+    left_spacer, center_col, right_spacer = st.columns([1, 1.7, 1])
 
     with center_col:
         with st.container(border=True):
             st.subheader("Registration Form")
-            st.write("Please fill in your details and click submit.")
+            st.write("Please fill in your details before starting the conversation.")
 
             with st.form("registration_form", enter_to_submit=False):
                 col1, col2 = st.columns(2)
+
                 with col1:
                     first_name = st.text_input("First Name")
                 with col2:
@@ -110,40 +98,30 @@ if not st.session_state.registration_submitted:
                     }
 
                     full_name = f"{first_name.strip()} {last_name.strip()}"
+
                     st.session_state.messages = [
                         {
                             "role": "assistant",
                             "content": (
                                 f"Hello {full_name}, thank you for registering. "
-                                "I can provide information about the position and help schedule a meeting "
-                                "with a recruiter. How can I help you today?"
-                            )
+                                "I can answer questions about the Python Developer role "
+                                "and help schedule an interview. How can I help you today?"
+                            ),
                         }
                     ]
 
-                    st.session_state.registration_ready_for_chat = True
-                    st.rerun()
-            if st.session_state.registration_ready_for_chat:
-                st.success("Registration completed successfully.")
-
-                if st.button("Continue to Chat with the Recruitment Bot", use_container_width=True):
                     st.session_state.registration_submitted = True
-                    st.session_state.registration_ready_for_chat = False
                     st.rerun()
-# -----------------------------
-# Chat screen
-# -----------------------------
-else:
-        
+
+
+def render_chat_screen(client):
     left_col, right_col = st.columns([2.2, 1], gap="medium")
 
     with left_col:
         with st.container(border=True):
             st.subheader("Conversation")
 
-            # Smaller dedicated chat area so chat_input stays visible
-            chat_area = st.container(height=320)
-
+            chat_area = st.container(height=420)
             with chat_area:
                 for msg in st.session_state.messages:
                     with st.chat_message(msg["role"]):
@@ -156,21 +134,24 @@ else:
 
         if user_input:
             st.session_state.api_error = ""
-            st.session_state.messages.append(
-                {"role": "user", "content": user_input}
-            )
+            st.session_state.messages.append({"role": "user", "content": user_input})
 
             try:
                 with st.spinner("Thinking..."):
-                    assistant_reply = get_chatgpt_response(
+                    result = process_user_message(
                         client=client,
                         applicant_info=st.session_state.applicant_info,
                         chat_history=st.session_state.messages,
+                        conversation_state=st.session_state.conversation_state,
                     )
 
+                assistant_message = result["assistant_message"]
+                updated_state = result["conversation_state"]
+
                 st.session_state.messages.append(
-                    {"role": "assistant", "content": assistant_reply}
+                    {"role": "assistant", "content": assistant_message}
                 )
+                st.session_state.conversation_state = updated_state
 
             except Exception as e:
                 st.session_state.api_error = f"API error: {str(e)}"
@@ -180,13 +161,41 @@ else:
     with right_col:
         with st.container(border=True):
             st.subheader("Applicant Info")
-            st.write(f"**First Name:** {st.session_state.applicant_info['first_name']}")
-            st.write(f"**Last Name:** {st.session_state.applicant_info['last_name']}")
-            st.write(f"**Email:** {st.session_state.applicant_info['email']}")
-            st.write(f"**Phone Number:** {st.session_state.applicant_info['phone_number']}")
+            st.write(f"**First Name:** {st.session_state.applicant_info.get('first_name', '')}")
+            st.write(f"**Last Name:** {st.session_state.applicant_info.get('last_name', '')}")
+            st.write(f"**Email:** {st.session_state.applicant_info.get('email', '')}")
+            st.write(f"**Phone Number:** {st.session_state.applicant_info.get('phone_number', '')}")
+
+            st.divider()
+
+            st.write("**Current State**")
+            st.write(st.session_state.conversation_state.get("status", "collecting"))
+            st.write("**Last Action**")
+            st.write(st.session_state.conversation_state.get("last_action", "none"))
 
             st.divider()
 
             if st.button("Start Over", use_container_width=True):
                 reset_app()
                 st.rerun()
+
+
+def main():
+    try:
+        client = bootstrap_app()
+    except Exception as e:
+        st.error(f"Startup error: {e}")
+        st.stop()
+
+    initialize_session_state()
+
+    st.title("Recruitment Chatbot")
+
+    if not st.session_state.registration_submitted:
+        render_registration_screen()
+    else:
+        render_chat_screen(client)
+
+
+if __name__ == "__main__":
+    main()
