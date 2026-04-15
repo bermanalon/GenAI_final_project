@@ -1,5 +1,17 @@
 # app/modules/scheduling/schedule_tools.py
 
+"""
+Scheduling Tools Layer.
+
+Defines tool schemas and execution logic for scheduling-related operations.
+Acts as an interface between the Scheduling Advisor and the database layer.
+
+Supports function calling for:
+- Getting available slots
+- Validating slots
+- Booking slots
+"""
+
 from app.modules.scheduling.schedule_db import (
     get_nearest_slots,
     get_available_slots_in_range,

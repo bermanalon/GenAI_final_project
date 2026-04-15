@@ -1,5 +1,17 @@
 # app/modules/scheduling/schedule_db.py
 
+"""
+Scheduling Database Access Layer.
+
+Provides low-level functions for interacting with the SQL Server database,
+including:
+- Retrieving available interview slots
+- Validating a specific slot
+- Booking a slot
+
+All database queries are implemented here.
+"""
+
 import pyodbc
 
 

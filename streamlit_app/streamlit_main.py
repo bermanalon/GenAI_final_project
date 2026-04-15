@@ -1,3 +1,24 @@
+# app/streamlit_main.py
+
+"""
+Streamlit UI for the Recruiting Chatbot.
+
+This module handles:
+- Candidate registration (basic personal details)
+- Chat interface for interacting with the chatbot
+- Display of conversation history and current state
+
+It connects the frontend UI to the backend logic in app.main by:
+- Initializing the chatbot (bootstrap_app)
+- Managing session state
+- Sending user messages to the main agent via process_user_message()
+
+This is a first test version focused on validating:
+- UI flow
+- Session management
+- Integration with the main agent
+"""
+
 import os
 import sys
 
@@ -16,7 +37,6 @@ from app.main import (
 
 st.set_page_config(
     page_title="Recruitment Chatbot",
-    page_icon="💼",
     layout="wide",
 )
 
@@ -62,13 +82,23 @@ def validate_registration(first_name, last_name, email, phone_number):
     return errors
 
 
+def format_state(state):
+    mapping = {
+        "new": "Starting",
+        "in_conversation": "Conversation in Progress",
+        "final_turn": "Wrapping Up",
+        "ended": "Conversation Completed",
+    }
+    return mapping.get(state, "Conversation")
+
+
 def render_registration_screen():
     left_spacer, center_col, right_spacer = st.columns([1, 1.7, 1])
 
     with center_col:
         with st.container(border=True):
             st.subheader("Registration Form")
-            st.write("Please fill in your details before starting the conversation.")
+            st.write("Please fill in your details for the Python Developer position.")
 
             with st.form("registration_form", enter_to_submit=False):
                 col1, col2 = st.columns(2)
@@ -103,9 +133,9 @@ def render_registration_screen():
                         {
                             "role": "assistant",
                             "content": (
-                                f"Hello {full_name}, thank you for registering. "
-                                "I can answer questions about the Python Developer role "
-                                "and help schedule an interview. How can I help you today?"
+                                f"Hello {full_name}, thank you for applying to the Python Developer position. "
+                                "I can answer questions about the role and help with next steps in the process. "
+                                "How can I help you today?"
                             ),
                         }
                     ]
@@ -114,7 +144,7 @@ def render_registration_screen():
                     st.rerun()
 
 
-def render_chat_screen(client):
+def render_chat_screen(main_agent):
     left_col, right_col = st.columns([2.2, 1], gap="medium")
 
     with left_col:
@@ -139,7 +169,7 @@ def render_chat_screen(client):
             try:
                 with st.spinner("Thinking..."):
                     result = process_user_message(
-                        client=client,
+                        main_agent=main_agent,
                         applicant_info=st.session_state.applicant_info,
                         chat_history=st.session_state.messages,
                         conversation_state=st.session_state.conversation_state,
@@ -147,11 +177,17 @@ def render_chat_screen(client):
 
                 assistant_message = result["assistant_message"]
                 updated_state = result["conversation_state"]
+                end_session = result.get("end_session", False)
 
                 st.session_state.messages.append(
                     {"role": "assistant", "content": assistant_message}
                 )
                 st.session_state.conversation_state = updated_state
+
+                if end_session:
+                    reset_app()
+                    st.rerun()
+                    return
 
             except Exception as e:
                 st.session_state.api_error = f"API error: {str(e)}"
@@ -168,10 +204,13 @@ def render_chat_screen(client):
 
             st.divider()
 
+            state_value = st.session_state.conversation_state.get("status", "new")
+            last_action = st.session_state.conversation_state.get("last_action", "none")
+
             st.write("**Current State**")
-            st.write(st.session_state.conversation_state.get("status", "collecting"))
+            st.write(format_state(state_value))
             st.write("**Last Action**")
-            st.write(st.session_state.conversation_state.get("last_action", "none"))
+            st.write(last_action)
 
             st.divider()
 
@@ -182,7 +221,7 @@ def render_chat_screen(client):
 
 def main():
     try:
-        client = bootstrap_app()
+        main_agent = bootstrap_app()
     except Exception as e:
         st.error(f"Startup error: {e}")
         st.stop()
@@ -194,7 +233,7 @@ def main():
     if not st.session_state.registration_submitted:
         render_registration_screen()
     else:
-        render_chat_screen(client)
+        render_chat_screen(main_agent)
 
 
 if __name__ == "__main__":
