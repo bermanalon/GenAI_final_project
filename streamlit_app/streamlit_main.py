@@ -4,19 +4,9 @@
 Streamlit UI for the Recruiting Chatbot.
 
 This module handles:
-- Candidate registration (basic personal details)
-- Chat interface for interacting with the chatbot
+- Candidate registration
+- Chat interface
 - Display of conversation history and current state
-
-It connects the frontend UI to the backend logic in app.main by:
-- Initializing the chatbot (bootstrap_app)
-- Managing session state
-- Sending user messages to the main agent via process_user_message()
-
-This is a first test version focused on validating:
-- UI flow
-- Session management
-- Integration with the main agent
 """
 
 import os
@@ -85,8 +75,9 @@ def validate_registration(first_name, last_name, email, phone_number):
 def format_state(state):
     mapping = {
         "new": "Starting",
-        "in_conversation": "Conversation in Progress",
-        "final_turn": "Wrapping Up",
+        "active": "Conversation in Progress",
+        "scheduling": "Scheduling in Progress",
+        "scheduled": "Interview Scheduled",
         "ended": "Conversation Completed",
     }
     return mapping.get(state, "Conversation")
@@ -144,7 +135,7 @@ def render_registration_screen():
                     st.rerun()
 
 
-def render_chat_screen(main_agent):
+def render_chat_screen(agents):
     left_col, right_col = st.columns([2.2, 1], gap="medium")
 
     with left_col:
@@ -160,7 +151,11 @@ def render_chat_screen(main_agent):
             if st.session_state.api_error:
                 st.error(st.session_state.api_error)
 
-        user_input = st.chat_input("Write your message here...")
+        if st.session_state.end_session:
+            st.info("This conversation has ended. To begin a new conversation, click Start Over.")
+            user_input = None
+        else:
+            user_input = st.chat_input("Write your message here...")
 
         if user_input:
             st.session_state.api_error = ""
@@ -169,7 +164,7 @@ def render_chat_screen(main_agent):
             try:
                 with st.spinner("Thinking..."):
                     result = process_user_message(
-                        main_agent=main_agent,
+                        agents=agents,
                         applicant_info=st.session_state.applicant_info,
                         chat_history=st.session_state.messages,
                         conversation_state=st.session_state.conversation_state,
@@ -185,7 +180,7 @@ def render_chat_screen(main_agent):
                 st.session_state.conversation_state = updated_state
 
                 if end_session:
-                    reset_app()
+                    st.session_state.end_session = True
                     st.rerun()
                     return
 
@@ -212,6 +207,9 @@ def render_chat_screen(main_agent):
             st.write("**Last Action**")
             st.write(last_action)
 
+            if st.session_state.end_session:
+                st.warning("Conversation ended")
+            
             st.divider()
 
             if st.button("Start Over", use_container_width=True):
@@ -221,7 +219,7 @@ def render_chat_screen(main_agent):
 
 def main():
     try:
-        main_agent = bootstrap_app()
+        agents = bootstrap_app()
     except Exception as e:
         st.error(f"Startup error: {e}")
         st.stop()
@@ -233,7 +231,7 @@ def main():
     if not st.session_state.registration_submitted:
         render_registration_screen()
     else:
-        render_chat_screen(main_agent)
+        render_chat_screen(agents)
 
 
 if __name__ == "__main__":
