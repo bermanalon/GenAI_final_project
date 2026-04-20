@@ -1,20 +1,6 @@
 # app/modules/orchestration/schedule_agent.py
 
-"""
-Scheduling Advisor.
-
-Simple tool-calling agent version.
-
-Responsibilities:
-- Read full chat history
-- Decide whether the user is in a scheduling flow
-- Infer referenced date/time from conversation context if needed
-- Use tools to get slots / validate / book
-- Return one simple structured result to the main agent
-"""
-
 import json
-from datetime import datetime
 
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -27,269 +13,181 @@ DEFAULT_POSITION = "Python Dev"
 
 
 @tool
-def get_nearest_slots_tool(start_date: str, position: str = DEFAULT_POSITION, limit: int = 3) -> str:
+def get_slots(start_date: str):
     """
-    Get the nearest available interview slots on or after start_date.
+    Get the 3 nearest available interview slots starting from a given date.
+
     Use this when the candidate wants to schedule or asks for available times.
-    start_date must be in YYYY-MM-DD format.
     """
-    result = execute_schedule_tool(
-        "get_nearest_slots",
-        {
-            "start_date": start_date,
-            "position": position,
-            "limit": limit,
-        }
+    return json.dumps(
+        execute_schedule_tool(
+            "get_nearest_slots",
+            {
+                "start_date": start_date,
+                "position": DEFAULT_POSITION,
+                "limit": 3,
+            },
+        )
     )
-    return json.dumps(result)
 
 
 @tool
-def validate_slot_tool(date: str, time: str, position: str = DEFAULT_POSITION) -> str:
+def validate(date: str, time: str):
     """
-    Validate whether a specific interview slot is available.
-    Use this when the candidate proposes or selects a specific date/time.
-    date must be YYYY-MM-DD and time must be HH:MM:SS.
+    Check if a specific interview slot is available.
+
+    Use this when the candidate proposes or confirms a date and time.
     """
-    result = execute_schedule_tool(
-        "validate_slot",
-        {
-            "date": date,
-            "time": time,
-            "position": position,
-        }
+    return json.dumps(
+        execute_schedule_tool(
+            "validate_slot",
+            {
+                "date": date,
+                "time": time,
+                "position": DEFAULT_POSITION,
+            },
+        )
     )
-    return json.dumps(result)
 
 
 @tool
-def book_slot_tool(date: str, time: str, position: str = DEFAULT_POSITION) -> str:
+def book(date: str, time: str):
     """
-    Book a validated interview slot.
-    Use this only after a slot was checked and found available.
-    date must be YYYY-MM-DD and time must be HH:MM:SS.
+    Book an interview slot if it is available.
+
+    Use this only after validating that the slot is available.
     """
-    result = execute_schedule_tool(
-        "book_slot",
-        {
-            "date": date,
-            "time": time,
-            "position": position,
-        }
+    return json.dumps(
+        execute_schedule_tool(
+            "book_slot",
+            {
+                "date": date,
+                "time": time,
+                "position": DEFAULT_POSITION,
+            },
+        )
     )
-    return json.dumps(result)
 
 
 def build_schedule_advisor(model):
-    """
-    Build the scheduling advisor as a LangChain tool-calling agent.
-    """
-    tools = [
-        get_nearest_slots_tool,
-        validate_slot_tool,
-        book_slot_tool,
-    ]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                """
+You are the scheduling advisor for a recruiting chatbot.
 
-    prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            """
-You are the Scheduling Advisor in a recruiting chatbot for a Python Developer position.
+You are called only when the main agent has already decided that scheduling
+is the primary action for this turn.
 
-Your job:
-- Decide whether the current user turn is about scheduling.
-- If it is about scheduling, use the available tools.
-- If it is not about scheduling, do not use tools.
+Use FULL chat history.
 
-You must use the full chat history and the conversation state.
+Important:
+- "yes", "ok", "that works", "Wednesday works", and similar short replies may confirm a previously suggested time
+- You MUST interpret short confirmations from context
+- If the candidate proposes a date and time, validate that slot
+- If the candidate asks to schedule but no exact slot is confirmed yet, offer the 3 nearest available slots
+- If a slot is available and the candidate clearly selected it, book it
+- If the requested slot is not available, offer alternatives
+- Return NONE only if scheduling truly cannot proceed from the current message
 
-Important rules:
-- If the user wants to schedule but does not give a specific slot, get the nearest 3 available slots.
-- If the user refers to a date in natural language, infer the exact date from the conversation context and today's date.
-- If the user selects or proposes a specific slot, validate it.
-- If the slot is available, book it.
-- If the slot is not available, offer the nearest 3 available alternatives.
-- If the message is only about job information, return NONE and do not use scheduling tools.
+Return JSON ONLY in this exact shape:
 
-Today's date:
-{today}
-
-Position:
-{position}
-
-Return a final answer as valid JSON only with this schema:
 {{
   "decision": "SCHEDULE" or "NONE",
   "assistant_message": "string",
   "selected_slot": {{"date": "YYYY-MM-DD", "time": "HH:MM:SS"}} or null,
-  "offered_slots": [{{"date": "YYYY-MM-DD", "time": "HH:MM:SS"}}] or [],
-  "booking_confirmed": true or false,
-  "last_sub_intent": "none" or "offer_slots" or "validate_slot" or "book_slot"
+  "offered_slots": [{{"date": "YYYY-MM-DD", "time": "HH:MM:SS"}}],
+  "booking_confirmed": true or false
 }}
 
-Examples:
-1.
-User: "I'd like to schedule an interview."
-Return JSON with decision="SCHEDULE", use get_nearest_slots_tool, and offer 3 slots.
+Rules:
+- If you are actively proposing, negotiating, validating, or confirming an interview time, decision = "SCHEDULE"
+- If you cannot perform a scheduling step from the current message, decision = "NONE"
+- If decision = "NONE", assistant_message should be an empty string
+- Return valid JSON only
+""".strip(),
+            ),
+            ("system", "Chat history:\n{chat_history}"),
+            ("user", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ]
+    )
 
-2.
-User: "Tuesday at 10 AM works for me."
-If you can infer the exact date from context, validate it.
-If available, book it.
-
-3.
-User: "Those times don't work. Anything next week?"
-Use get_nearest_slots_tool again.
-
-4.
-User: "Is the role hybrid?"
-Return:
-{{"decision":"NONE","assistant_message":"","selected_slot":null,"offered_slots":[],"booking_confirmed":false,"last_sub_intent":"none"}}
-"""
-        ),
-        ("system", "Conversation state:\n{conversation_state}"),
-        ("system", "Chat history:\n{chat_history}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ("user", "{input}"),
-    ])
+    tools = [get_slots, validate, book]
 
     agent = create_tool_calling_agent(
         llm=model,
         tools=tools,
         prompt=prompt,
-    )
+    )   
 
-    executor = AgentExecutor(
+    return AgentExecutor(
         agent=agent,
         tools=tools,
         verbose=False,
     )
 
-    return executor
 
-
-def run_schedule_advisor(schedule_advisor, chat_history, conversation_state):
-    """
-    Run the scheduling advisor on the latest user message.
-
-    Returns:
-    {
-        "decision": "SCHEDULE" or "NONE",
-        "assistant_message": "...",
-        "state_update": {...}
-    }
-    """
-    latest_user_message = get_latest_user_message(chat_history).strip()
+def run_schedule_advisor(schedule_advisor, chat_history, state):
+    user_message = get_last_user_message(chat_history)
 
     response = schedule_advisor.invoke(
         {
-            "input": latest_user_message,
-            "chat_history": format_chat_history(chat_history),
-            "conversation_state": format_schedule_state(conversation_state),
-            "today": get_today_date_string(),
-            "position": DEFAULT_POSITION,
+            "input": user_message,
+            "chat_history": format_history(chat_history),
+            "agent_scratchpad": [],
         }
     )
 
-    parsed = parse_schedule_output(response.get("output", ""))
+    data = safe_parse(response.get("output", ""))
 
-    decision = parsed.get("decision", "NONE")
-    assistant_message = parsed.get("assistant_message", "")
-    selected_slot = parsed.get("selected_slot")
-    offered_slots = parsed.get("offered_slots", [])
-    booking_confirmed = parsed.get("booking_confirmed", False)
-    last_sub_intent = parsed.get("last_sub_intent", "none")
-
-    if decision not in ["SCHEDULE", "NONE"]:
-        decision = "NONE"
+    decision = data.get("decision", "NONE")
+    assistant_message = data.get("assistant_message", "")
+    selected_slot = data.get("selected_slot")
+    offered_slots = data.get("offered_slots", [])
+    booking_confirmed = data.get("booking_confirmed", False)
 
     return {
         "decision": decision,
         "assistant_message": assistant_message,
+        "selected_slot": selected_slot,
+        "offered_slots": offered_slots,
+        "booking_confirmed": booking_confirmed,
         "state_update": {
-            "top_level": {
-                "status": "scheduled" if booking_confirmed else ("scheduling" if decision == "SCHEDULE" else conversation_state.get("status", "active")),
-                "last_action": (
-                    "confirm_booking" if booking_confirmed
-                    else "offer_slots" if decision == "SCHEDULE"
-                    else conversation_state.get("last_action", "none")
-                ),
-            },
-            "main_state": {},
-            "exit_state": {},
             "schedule_state": {
-                "active": decision == "SCHEDULE",
+                "active": decision == "SCHEDULE" and not booking_confirmed,
                 "last_schedule_decision": decision,
-                "last_sub_intent": last_sub_intent,
                 "last_offered_slots": offered_slots,
                 "selected_slot": selected_slot,
                 "booking_confirmed": booking_confirmed,
-            },
-            "info_state": {},
-        }
+            }
+        },
     }
 
 
-def get_latest_user_message(chat_history):
-    """
-    Return the latest user message from full chat history.
-    """
-    for msg in reversed(chat_history):
-        if msg.get("role") == "user":
-            return msg.get("content", "")
+def get_last_user_message(history):
+    for message in reversed(history):
+        if message["role"] == "user":
+            return message["content"]
     return ""
 
 
-def format_chat_history(chat_history):
-    """
-    Convert full chat history into a readable text block.
-    """
-    lines = []
-    for msg in chat_history:
-        role = msg.get("role", "unknown").upper()
-        content = msg.get("content", "")
-        lines.append(f"{role}: {content}")
-    return "\n".join(lines)
+def format_history(history):
+    return "\n".join(
+        f"{message['role'].upper()}: {message['content']}"
+        for message in history
+    )
 
 
-def format_schedule_state(conversation_state):
-    """
-    Keep the schedule context compact.
-    """
-    schedule_state = conversation_state.get("schedule_state", {})
-
-    lines = []
-    lines.append(f"status: {conversation_state.get('status')}")
-    lines.append(f"last_action: {conversation_state.get('last_action')}")
-    lines.append(f"booking_confirmed: {schedule_state.get('booking_confirmed')}")
-    lines.append(f"selected_slot: {schedule_state.get('selected_slot')}")
-    lines.append(f"last_offered_slots: {schedule_state.get('last_offered_slots')}")
-    return "\n".join(lines)
-
-
-def parse_schedule_output(output_text):
-    """
-    Parse the agent JSON output safely.
-    """
+def safe_parse(text):
     try:
-        parsed = json.loads(output_text)
-        if isinstance(parsed, dict):
-            return parsed
+        return json.loads(text)
     except Exception:
-        pass
-
-    return {
-        "decision": "NONE",
-        "assistant_message": "",
-        "selected_slot": None,
-        "offered_slots": [],
-        "booking_confirmed": False,
-        "last_sub_intent": "none",
-    }
-
-
-def get_today_date_string():
-    """
-    Return today's date in YYYY-MM-DD format.
-    """
-    return datetime.now().strftime("%Y-%m-%d")
+        return {
+            "decision": "NONE",
+            "assistant_message": "",
+            "selected_slot": None,
+            "offered_slots": [],
+            "booking_confirmed": False,
+        }

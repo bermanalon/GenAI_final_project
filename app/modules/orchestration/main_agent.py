@@ -1,20 +1,7 @@
 # app/modules/orchestration/main_agent.py
 
-"""
-Main Agent (Orchestrator).
-
-Responsible for handling each user turn. Applies the following flow:
-1. Checks with Exit Advisor to avoid unnecessary interaction.
-2. Detects user intent (schedule / info / both).
-3. Routes the request to the appropriate advisor(s).
-4. Composes the final response and decision (CONTINUE / SCHEDULE / END).
-
-This is the core decision-making component of the system.
-"""
-
 from datetime import datetime, timezone
 
-from langchain_openai import ChatOpenAI
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -24,49 +11,94 @@ from app.modules.orchestration.exit_agent import run_exit_advisor
 from app.modules.orchestration.schedule_agent import run_schedule_advisor
 from app.modules.orchestration.info_agent import run_info_advisor
 
+
 MEMORY_STORE = {}
 
 
 def get_history(session_id):
-    """
-    Return message history for a session.
-    """
     if session_id not in MEMORY_STORE:
         MEMORY_STORE[session_id] = ChatMessageHistory()
     return MEMORY_STORE[session_id]
 
 
 def build_main_agent(model):
-    """
-    Build the main conversational agent with memory.
-    """
-    main_prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are a recruiting chatbot for a Python Developer position.\n"
-            "Be professional, concise, warm, and clear.\n"
-            "Use the conversation history naturally.\n"
-            "Answer questions and keep the conversation flowing.\n"
-            "Do not mention internal logic, advisors, routing, or system design."
-        ),
-        ("system", "Applicant info:\n{applicant_info}"),
-        ("system", "Conversation state:\n{conversation_state}"),
-        MessagesPlaceholder(variable_name="history"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ("user", "{input}")
-    ])
+    routing_instructions = """
+You are evaluating the routing decision of a recruiting chatbot.
 
-    main_agent = create_tool_calling_agent(model, tools=[], prompt=main_prompt)
-    main_executor = AgentExecutor(agent=main_agent, tools=[], verbose=False)
+Given the full conversation so far, return ONLY one of these exact labels:
+continue
+schedule
+end
 
-    main_agent_with_memory = RunnableWithMessageHistory(
-        main_executor,
+Definitions:
+- continue: continue the conversation, answer questions, gather more information, or send a mainly informational reply
+- schedule: actively move the conversation through interview scheduling, including proposing, negotiating, or confirming an interview meeting
+- end: end the conversation because the candidate is no longer interested, asked to stop, or the conversation has already been fully concluded with no further substantive reply needed
+
+Important rules:
+- If the candidate asks for information or the recruiter is mainly answering a question, return continue
+- If the recruiter message mainly provides information, return continue even if it also mentions that the interview is confirmed or booked
+- Use end only when the message mainly closes the conversation, such as a short wrap-up after booking, a goodbye, or acknowledging opt-out
+- If the conversation is actively choosing, proposing, changing, negotiating, or setting up an interview, return schedule
+- If the recruiter’s message is mostly informational and only lightly suggests a future meeting for the first time, prefer continue over schedule
+- If the candidate opts out, is no longer interested, asks to stop, or the conversation is clearly concluded, return end
+
+Important adaptation for this system:
+- Use the full conversation and decide the single best next action for the chatbot
+- Even if both scheduling and information appear in the latest turn, choose only one label:
+  - choose continue when the next assistant reply should mainly answer, explain, or gather information
+  - choose schedule when the next assistant reply should mainly propose, validate, negotiate, or confirm an interview slot
+- Do not return JSON
+- Do not explain your answer
+
+Borderline examples:
+
+Example 1:
+CHAT:
+RECRUITER: Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?
+CANDIDATE: I've been using Python professionally for five years, mostly for data analysis.
+RECRUITER: Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?
+CANDIDATE: Tuesday at 10 AM works. But can I get more details about the position?
+RECRUITER: Great, your interview is confirmed. Sure, We're looking for a skilled Python Developer with expertise in Python 3 and experience working with frameworks such as Django, Flask, or FastAPI. The ideal candidate should be familiar with building RESTful APIs, working with SQL or NoSQL databases, and using version control systems like Git.
+
+LABEL:
+continue
+
+Example 2:
+CHAT:
+RECRUITER: Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?
+CANDIDATE: I have three years' experience with Pyhon and AWS.
+RECRUITER: Could you elaborate on your experience with cloud platforms like AWS?
+CANDIDATE: I've worked a bit with AWS, mainly for deploying small apps and managing storage, but I'm still gaining experience and open to learning more.
+RECRUITER: I see, the role focuses on building backend services in Python, mainly FastAPI.
+CANDIDATE: Sounds very interesting, I'm confident I can handle it
+RECRUITER: Great, Can we set up a meeting next Tuesday
+
+LABEL:
+schedule
+
+Return only the label, with no explanation.
+""".strip()
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", routing_instructions),
+            ("system", "Conversation state:\n{conversation_state}"),
+            MessagesPlaceholder(variable_name="history"),
+            ("user", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ]
+    )
+
+    agent = create_tool_calling_agent(model, tools=[], prompt=prompt)
+    executor = AgentExecutor(agent=agent, tools=[], verbose=False)
+
+    return RunnableWithMessageHistory(
+        executor,
         get_session_history=get_history,
         input_messages_key="input",
         history_messages_key="history",
     )
-
-    return main_agent_with_memory
 
 
 def run_main_agent(
@@ -78,268 +110,209 @@ def run_main_agent(
     chat_history,
     conversation_state,
 ):
-    """
-    Handle one user turn.
+    state = dict(conversation_state)
 
-    Flow:
-    1. Ensure session id
-    2. Log latest user turn
-    3. Run Exit Advisor first
-    4. If END -> use Exit Advisor ending message and return
-    5. Otherwise run Schedule Advisor
-    6. If SCHEDULE -> use Schedule Advisor response and return
-    7. Otherwise let the main agent reply normally
-    """
-    updated_state = dict(conversation_state)
+    if not state.get("session_id"):
+        state["session_id"] = "session_1"
 
-    if not updated_state.get("session_id"):
-        updated_state["session_id"] = build_session_id(applicant_info)
+    ensure_state(state)
+    ensure_logging(state)
 
-    ensure_logging_state(updated_state)
+    user_message = get_latest_user_message(chat_history).strip()
+    append_user_turn(state, user_message)
 
-    latest_user_message = get_latest_user_message(chat_history).strip()
+    state["turn_count"] = state.get("turn_count", 0) + 1
 
-    append_user_turn_if_needed(updated_state, latest_user_message)
-
-    # --------------------------------------------------
-    # 1) EXIT ADVISOR
-    # --------------------------------------------------
+    # 1. EXIT ADVISOR FIRST
     exit_result = run_exit_advisor(
         exit_advisor=exit_advisor,
         chat_history=chat_history,
-        conversation_state=updated_state,
+        conversation_state=state,
     )
 
-    updated_state = apply_state_update(
-        updated_state,
-        exit_result.get("state_update", {})
-    )
+    state = apply_state_update(state, exit_result.get("state_update", {}))
 
-    if exit_result.get("decision") == "END":
-        assistant_text = exit_result.get(
-            "assistant_message",
-            "Thank you for the conversation. I will end this chat here."
-        )
+    if exit_result["decision"] == "END":
+        assistant_text = exit_result["assistant_message"].strip()
 
-        updated_state["turn_count"] = updated_state.get("turn_count", 0) + 1
-        updated_state["status"] = "ended"
-        updated_state["last_action"] = "end"
-        updated_state["main_state"]["final_decision"] = "END"
-        updated_state["main_state"]["last_routing_reason"] = "exit_advisor_end"
+        if not assistant_text:
+            assistant_text = "Thank you for the update. I wish you the best."
 
-        append_assistant_turn(
-            updated_state,
-            text=assistant_text,
-            label="end",
-        )
+        append_assistant_turn(state, assistant_text, "end")
+
+        state["status"] = "ended"
+        state["last_action"] = "end"
+        state["main_state"]["route"] = "end"
+        state["main_state"]["final_decision"] = "end"
 
         return {
             "assistant_message": assistant_text,
-            "conversation_state": updated_state,
+            "conversation_state": state,
             "end_session": True,
         }
 
-    # --------------------------------------------------
-    # 2) SCHEDULE ADVISOR
-    # --------------------------------------------------
-    schedule_result = run_schedule_advisor(
-        schedule_advisor=schedule_advisor,
-        chat_history=chat_history,
-        conversation_state=updated_state,
+    # 2. MAIN ROUTING
+    route = get_main_route(
+        main_agent=main_agent,
+        state=state,
+        user_message=user_message,
     )
 
-    updated_state = apply_state_update(
-        updated_state,
-        schedule_result.get("state_update", {})
-    )
+    # Exit remains owned by the exit advisor
+    if route == "end":
+        route = "continue"
 
-    if schedule_result.get("decision") == "SCHEDULE":
-        assistant_text = schedule_result.get(
-            "assistant_message",
-            "I can help schedule the interview."
+    state["main_state"]["route"] = route
+
+    # 3. EXECUTE ONE PRIMARY ADVISOR ONLY
+    if route == "schedule":
+        advisor_result = run_schedule_advisor(
+            schedule_advisor=schedule_advisor,
+            chat_history=chat_history,
+            state=state,
         )
 
-        updated_state["turn_count"] = updated_state.get("turn_count", 0) + 1
-        updated_state["main_state"]["final_decision"] = "SCHEDULE"
-        updated_state["main_state"]["last_routing_reason"] = "schedule_advisor_schedule"
+        state = apply_state_update(state, advisor_result.get("state_update", {}))
 
-        append_assistant_turn(
-            updated_state,
-            text=assistant_text,
-            label="schedule",
+        assistant_text = advisor_result.get("assistant_message", "").strip()
+
+        if assistant_text:
+            final_decision = "schedule"
+            label = "schedule"
+
+            if state["schedule_state"].get("booking_confirmed"):
+                state["status"] = "scheduled"
+            else:
+                state["status"] = "scheduling"
+
+            state["last_action"] = "schedule"
+        else:
+            info_result = run_info_advisor(
+                info_advisor=info_advisor,
+                chat_history=chat_history,
+                state=state,
+            )
+            state = apply_state_update(state, info_result.get("state_update", {}))
+
+            assistant_text = info_result.get("assistant_message", "").strip()
+            final_decision = "continue"
+            label = "continue"
+            state["status"] = "active"
+            state["last_action"] = "continue"
+
+    else:
+        info_result = run_info_advisor(
+            info_advisor=info_advisor,
+            chat_history=chat_history,
+            state=state,
         )
 
-        return {
-            "assistant_message": assistant_text,
-            "conversation_state": updated_state,
-            "end_session": False,
-        }
+        state = apply_state_update(state, info_result.get("state_update", {}))
 
-    # --------------------------------------------------
-    # 3) NORMAL MAIN AGENT RESPONSE
-    # --------------------------------------------------
-    response = main_agent.invoke(
-        {
-            "input": latest_user_message,
-            "applicant_info": format_applicant_info(applicant_info),
-            "conversation_state": format_state(updated_state),
-        },
-        config={
-            "configurable": {
-                "session_id": updated_state["session_id"]
-            }
-        },
-    )
+        assistant_text = info_result.get("assistant_message", "").strip()
+        final_decision = "continue"
+        label = "continue"
+        state["status"] = "active"
+        state["last_action"] = "continue"
 
-    assistant_text = response["output"]
+    if not assistant_text:
+        assistant_text = "Could you please clarify?"
 
-    updated_state["turn_count"] = updated_state.get("turn_count", 0) + 1
-    updated_state["status"] = "active"
-    updated_state["last_action"] = "continue"
-    updated_state["main_state"]["final_decision"] = "CONTINUE"
-    updated_state["main_state"]["last_routing_reason"] = "main_agent_continue"
-
-    append_assistant_turn(
-        updated_state,
-        text=assistant_text,
-        label="continue",
-    )
+    state["main_state"]["final_decision"] = final_decision
+    append_assistant_turn(state, assistant_text, label)
 
     return {
         "assistant_message": assistant_text,
-        "conversation_state": updated_state,
+        "conversation_state": state,
         "end_session": False,
     }
 
 
-def apply_state_update(current_state, state_update):
-    """
-    Apply a structured state_update onto the current conversation state.
+def get_main_route(main_agent, state, user_message):
+    try:
+        response = main_agent.invoke(
+            {
+                "input": user_message,
+                "conversation_state": format_state(state),
+            },
+            config={
+                "configurable": {
+                    "session_id": state["session_id"] + "_routing"
+                }
+            },
+        )
 
-    Rules:
-    - top_level fields are merged into the root state
-    - nested state sections are shallow-merged
-    - missing sections are ignored
-    """
-    updated = dict(current_state)
+        output_text = response["output"].strip().lower()
 
-    top_level = state_update.get("top_level", {})
-    for key, value in top_level.items():
-        if key == "turn_count_delta":
-            updated["turn_count"] = updated.get("turn_count", 0) + value
-        else:
-            updated[key] = value
+        if output_text in ["continue", "schedule", "end"]:
+            return output_text
+
+    except Exception:
+        pass
+
+    return "continue"
+
+
+def apply_state_update(state, update):
+    for key, value in update.get("top_level", {}).items():
+        state[key] = value
 
     for section in ["main_state", "exit_state", "schedule_state", "info_state"]:
-        section_update = state_update.get(section, {})
-        if section not in updated:
-            updated[section] = {}
-        updated[section] = {**updated.get(section, {}), **section_update}
+        state.setdefault(section, {})
+        state[section].update(update.get(section, {}))
 
-    return updated
+    return state
 
 
-def build_session_id(applicant_info):
-    """
-    Build a stable session id from applicant email.
-    """
-    email = applicant_info.get("email", "").strip()
-    return f"user_{email}"
-
-
-def format_applicant_info(applicant_info):
-    """
-    Convert applicant info dict to a readable text block for the prompt.
-    """
-    return "\n".join([f"{k}: {v}" for k, v in applicant_info.items()])
-
-
-def format_state(state):
-    """
-    Convert conversation state dict to a readable text block for the prompt.
-    """
-    lines = []
-
-    for key, value in state.items():
-        if isinstance(value, dict):
-            lines.append(f"{key}:")
-            for sub_key, sub_value in value.items():
-                lines.append(f"  {sub_key}: {sub_value}")
-        elif isinstance(value, list):
-            lines.append(f"{key}: {len(value)} items")
-        else:
-            lines.append(f"{key}: {value}")
-
-    return "\n".join(lines)
-
-
-def get_latest_user_message(chat_history):
-    """
-    Return the most recent user message from chat history.
-    """
-    for msg in reversed(chat_history):
-        if msg["role"] == "user":
-            return msg["content"]
+def get_latest_user_message(history):
+    for message in reversed(history):
+        if message["role"] == "user":
+            return message["content"]
     return ""
 
 
-def ensure_logging_state(state):
-    """
-    Ensure logging fields exist in conversation_state.
-    """
-    if "conversation_log" not in state:
-        state["conversation_log"] = []
+def ensure_state(state):
+    for key in ["main_state", "exit_state", "schedule_state", "info_state"]:
+        state.setdefault(key, {})
+    state.setdefault("status", "active")
+    state.setdefault("last_action", "none")
+    state.setdefault("turn_count", 0)
 
-    if "log_meta" not in state:
-        state["log_meta"] = {
-            "next_turn_id": 1,
-            "last_logged_user_text": None,
+
+def ensure_logging(state):
+    state.setdefault("conversation_log", [])
+    state.setdefault("log_meta", {"next_turn_id": 1})
+
+
+def append_user_turn(state, text):
+    state["conversation_log"].append(
+        {
+            "turn_id": state["log_meta"]["next_turn_id"],
+            "speaker": "user",
+            "text": text,
+            "label": None,
+            "timestamp_utc": now(),
         }
-
-
-def append_user_turn_if_needed(state, text):
-    """
-    Append the latest user turn only if it was not logged yet.
-    """
-    if not text:
-        return
-
-    ensure_logging_state(state)
-
-    if state["log_meta"].get("last_logged_user_text") == text:
-        return
-
-    state["conversation_log"].append({
-        "turn_id": state["log_meta"]["next_turn_id"],
-        "speaker": "user",
-        "text": text,
-        "label": None,
-        "timestamp_utc": get_utc_timestamp(),
-    })
-
+    )
     state["log_meta"]["next_turn_id"] += 1
-    state["log_meta"]["last_logged_user_text"] = text
 
 
 def append_assistant_turn(state, text, label):
-    """
-    Append an assistant turn with the action label decided by the system.
-    """
-    ensure_logging_state(state)
-
-    state["conversation_log"].append({
-        "turn_id": state["log_meta"]["next_turn_id"],
-        "speaker": "assistant",
-        "text": text,
-        "label": label,
-        "timestamp_utc": get_utc_timestamp(),
-    })
-
+    state["conversation_log"].append(
+        {
+            "turn_id": state["log_meta"]["next_turn_id"],
+            "speaker": "assistant",
+            "text": text,
+            "label": label,
+            "timestamp_utc": now(),
+        }
+    )
     state["log_meta"]["next_turn_id"] += 1
 
 
-def get_utc_timestamp():
-    """
-    Return current UTC timestamp as ISO string.
-    """
+def now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def format_state(state):
+    return "\n".join(f"{key}: {value}" for key, value in state.items())

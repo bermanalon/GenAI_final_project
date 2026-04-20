@@ -65,28 +65,25 @@ def create_initial_session_state():
             "last_action": "none",
             "turn_count": 0,
             "session_id": None,
-
             "conversation_log": [],
             "log_meta": {
                 "next_turn_id": 1,
                 "last_logged_user_text": None,
             },
-
             "main_state": {
+                "route": None,
                 "final_decision": None,
                 "last_routing_reason": None,
             },
-
             "exit_state": {
                 "end_signal_count": 0,
                 "strong_opt_out_detected": False,
-                "last_exit_decision": "CONTINUE",
+                "last_exit_decision": "continue",
                 "last_exit_reason": None,
             },
-
             "schedule_state": {
                 "active": False,
-                "last_schedule_decision": "NONE",
+                "last_schedule_decision": "none",
                 "last_sub_intent": "none",
                 "last_offered_slots": [],
                 "rejected_slots": [],
@@ -95,15 +92,15 @@ def create_initial_session_state():
                 "last_detected_date_text": None,
                 "last_detected_time_text": None,
             },
-
             "info_state": {
-                "last_info_decision": "NONE",
+                "last_info_decision": "none",
                 "answered_topics": [],
                 "open_questions": [],
                 "last_topic": None,
             },
         },
     }
+
 
 def process_user_message(agents, applicant_info, chat_history, conversation_state):
     """
