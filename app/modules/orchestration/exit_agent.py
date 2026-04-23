@@ -5,54 +5,114 @@ Exit Advisor.
 
 Purpose:
 - Decide whether the conversation should end
-- Use only the model for the decision
+- Use the fine-tuned model for the decision
 - If ending is appropriate, formulate the final assistant message
 
-This version keeps the same external contract:
-- build_exit_advisor(model)
-- run_exit_advisor(exit_advisor, chat_history, conversation_state)
+
 """
 
-import json
+from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 
 
 def build_exit_advisor(model):
-    """
-    Build the Exit Advisor.
-    """
-    return {
-        "model": model
-    }
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                """
+You are the Exit Advisor in a recruiting chatbot for a Python Developer position.
 
+Your task:
+Decide whether the chatbot should END the conversation now or CONTINUE the conversation.
 
-def run_exit_advisor(exit_advisor, chat_history, conversation_state):
-    """
-    Run the Exit Advisor on the full chat history.
+Return:
+END or CONTINUE
 
-    Returns:
-        {
-            "decision": "END" or "CONTINUE",
-            "assistant_message": "...",
-            "state_update": {...}
-        }
-    """
-    llm_result = ask_llm_exit_decision(
-        model=exit_advisor["model"],
-        chat_history=chat_history,
-        conversation_state=conversation_state,
+Return END only when the conversation should clearly be concluded, for example:
+- The candidate says they are not interested
+- The candidate asks to stop being contacted
+- The candidate says they found another job
+- The interaction has naturally concluded after scheduling or final closure
+
+Return CONTINUE when:
+- the candidate is still engaged
+- the candidate asks questions
+- the candidate wants more information
+- the candidate wants to schedule or continue the process
+- there is any reasonable doubt
+
+Rules:
+- Prefer CONTINUE if unsure.
+- Return only END or CONTINUE.
+- Do not explain your answer.
+
+Implementation notes:
+- Use the full conversation history
+- Consider the conversation state
+- Do not assume END just because booking was confirmed
+""".strip(),
+            ),
+            ("system", "Conversation state:\n{conversation_state}"),
+            MessagesPlaceholder(variable_name="history"),
+            ("user", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ]
     )
 
-    decision = llm_result.get("decision", "CONTINUE")
-    assistant_message = llm_result.get("assistant_message", "")
+    agent = create_tool_calling_agent(
+        llm=model,
+        tools=[],
+        prompt=prompt,
+    )
 
-    if decision not in ["END", "CONTINUE"]:
-        decision = "CONTINUE"
+    return AgentExecutor(
+        agent=agent,
+        tools=[],
+        verbose=False,
+    )
+    
+def run_exit_advisor(exit_advisor, exit_message_model, chat_history, conversation_state):
+    """
+    Run the Exit Advisor.
 
-    if decision == "CONTINUE":
+    Returns:
+    {
+        "decision": "END" or "CONTINUE",
+        "assistant_message": "...",
+        "state_update": {...}
+    }
+    """
+
+    user_message = get_last_user_message(chat_history)
+    history_messages = convert_to_langchain_messages(chat_history[:-1])
+
+    try:
+        response = exit_advisor.invoke(
+            {
+                "input": user_message,
+                "history": history_messages,
+                "conversation_state": format_state_for_prompt(conversation_state),
+                "agent_scratchpad": [],
+            }
+        )
+        raw_output = response.get("output", "").strip().upper()
+    except Exception:
+        raw_output = "CONTINUE"
+
+    decision = raw_output if raw_output in ["END", "CONTINUE"] else "CONTINUE"
+
+    if decision == "END":
+        assistant_message = generate_exit_message(
+            model=exit_message_model,
+            chat_history=chat_history,
+            conversation_state=conversation_state,
+        )
+        if not assistant_message:
+            assistant_message = assistant_message = "Thank you. Wishing you all the best."
+    else:
         assistant_message = ""
-
-    if decision == "END" and not assistant_message:
-        assistant_message = "Thank you for the conversation. I wish you all the best."
 
     return {
         "decision": decision,
@@ -65,113 +125,76 @@ def run_exit_advisor(exit_advisor, chat_history, conversation_state):
             "main_state": {},
             "exit_state": {
                 "last_exit_decision": decision,
-                "last_exit_reason": llm_result.get("reason", "llm_decision"),
             },
             "schedule_state": {},
             "info_state": {},
-        }
+        },
     }
 
+def get_last_user_message(history):
+    for message in reversed(history):
+        if message["role"] == "user":
+            return message["content"]
+    return ""
 
-def ask_llm_exit_decision(model, chat_history, conversation_state):
-    """
-    Ask the model whether the conversation should END or CONTINUE.
+def convert_to_langchain_messages(history):
+    messages = []
 
-    Expected JSON output:
-    {
-      "decision": "END" or "CONTINUE",
-      "assistant_message": "string",
-      "reason": "short_reason"
-    }
-    """
-    prompt = build_exit_prompt(chat_history, conversation_state)
+    for message in history:
+        role = message.get("role")
+        content = message.get("content", "")
 
-    try:
-        response = model.invoke(prompt)
-        content = extract_text_from_llm_response(response)
-        parsed = json.loads(content)
+        if not content:
+            continue
 
-        return {
-            "decision": parsed.get("decision", "CONTINUE"),
-            "assistant_message": parsed.get("assistant_message", ""),
-            "reason": parsed.get("reason", "llm_decision"),
-        }
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
 
-    except Exception:
-        return {
-            "decision": "CONTINUE",
-            "assistant_message": "",
-            "reason": "llm_fallback_continue",
-        }
+    return messages
 
-
-def build_exit_prompt(chat_history, conversation_state):
-    """
-    Build the prompt for the Exit Advisor.
-    """
+def build_exit_message_prompt(chat_history, conversation_state):
     return f"""
-You are the Exit Advisor in a recruiting chatbot for a Python Developer position.
+You are a recruiting assistant.
 
-Your task:
-Decide whether the chatbot should END the conversation now or CONTINUE the conversation.
+The conversation should now end.
 
-Return END only when the conversation should clearly be concluded, for example:
-- the candidate says they are not interested
-- the candidate asks to stop being contacted
-- the candidate says they found another job
-- the interaction has naturally concluded after scheduling or final closure
+Write one short, polite closing message to the candidate.
 
-Return CONTINUE when:
-- the candidate is still engaged
-- the candidate asks questions
-- the candidate wants more information
-- the candidate wants to schedule or continue the process
-- there is any reasonable doubt
+Use the full conversation history when writing the message.
+Make the message fit the conversation outcome:
+- if an interview was scheduled, close positively
+- if the candidate is no longer interested or asked to stop, close respectfully
 
 Rules:
-- Prefer CONTINUE if unsure.
-- If decision is CONTINUE, assistant_message must be an empty string.
-- If decision is END, assistant_message must contain a short, polite closing message.
-- Do not mention internal logic, advisors, routing, labels, or system behavior.
-- Return valid JSON only.
-
-Output schema:
-{{
-  "decision": "END" or "CONTINUE",
-  "assistant_message": "string",
-  "reason": "short_reason"
-}}
-
-Examples:
-
-Example 1:
-Candidate message: "Please remove me from your list."
-Output:
-{{"decision":"END","assistant_message":"Understood. Thank you for the update, and best of luck.","reason":"candidate_opt_out"}}
-
-Example 2:
-Candidate message: "Is the position still open?"
-Output:
-{{"decision":"CONTINUE","assistant_message":"","reason":"candidate_still_engaged"}}
-
-Example 3:
-Candidate message: "Sounds great, see you then."
-Conversation context: interview already confirmed
-Output:
-{{"decision":"END","assistant_message":"Great, thank you. We look forward to speaking with you.","reason":"natural_closure_after_confirmation"}}
+- be concise
+- do not ask a question
+- do not continue the conversation
+- return only the message text
 
 Conversation state:
-{format_conversation_state(conversation_state)}
+{format_state_for_prompt(conversation_state)}
 
 Chat history:
 {format_chat_history(chat_history)}
 """.strip()
 
+def generate_exit_message(model, chat_history, conversation_state):
+    """
+    Generate a polite closing message using the general model,
+    based on full chat history and conversation state.
+    """
 
+    prompt = build_exit_message_prompt(chat_history, conversation_state)
+
+    try:
+        response = model.invoke(prompt)
+        return response.content.strip()
+    except Exception:
+        return ""
+    
 def format_chat_history(chat_history):
-    """
-    Convert chat history into a readable text block.
-    """
     lines = []
 
     for msg in chat_history:
@@ -181,42 +204,15 @@ def format_chat_history(chat_history):
 
     return "\n".join(lines)
 
-
-def format_conversation_state(conversation_state):
-    """
-    Convert relevant state fields into a compact text block.
-    """
+def format_state_for_prompt(state):
     lines = []
 
-    lines.append(f"status: {conversation_state.get('status')}")
-    lines.append(f"last_action: {conversation_state.get('last_action')}")
-    lines.append(f"turn_count: {conversation_state.get('turn_count')}")
+    lines.append(f"status: {state.get('status')}")
+    lines.append(f"last_action: {state.get('last_action')}")
 
-    exit_state = conversation_state.get("exit_state", {})
-    schedule_state = conversation_state.get("schedule_state", {})
-
-    lines.append(f"last_exit_decision: {exit_state.get('last_exit_decision')}")
+    schedule_state = state.get("schedule_state", {})
     lines.append(f"booking_confirmed: {schedule_state.get('booking_confirmed')}")
     lines.append(f"selected_slot: {schedule_state.get('selected_slot')}")
 
     return "\n".join(lines)
 
-
-def extract_text_from_llm_response(response):
-    """
-    Extract plain text from LangChain model response.
-    """
-    if hasattr(response, "content"):
-        if isinstance(response.content, str):
-            return response.content.strip()
-
-        if isinstance(response.content, list):
-            parts = []
-            for item in response.content:
-                if isinstance(item, dict) and item.get("type") == "text":
-                    parts.append(item.get("text", ""))
-                elif hasattr(item, "get") and item.get("text"):
-                    parts.append(item.get("text", ""))
-            return "".join(parts).strip()
-
-    return str(response).strip()

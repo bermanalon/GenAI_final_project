@@ -1,11 +1,52 @@
 # app/modules/orchestration/schedule_agent.py
 
+"""
+Scheduling Advisor.
+
+Purpose:
+- Handle all interview scheduling interactions within the recruiting chatbot
+- Interpret candidate intent related to proposing, confirming, or modifying interview times
+- Use tool calling to:
+    - retrieve available slots
+    - validate requested slots
+    - book confirmed interviews
+
+Design:
+- Uses LangChain tool-calling agent with access to scheduling tools
+- Receives full conversation history via MessagesPlaceholder ("history")
+- Receives the latest user message separately as "input"
+- Returns structured JSON output for the main agent to consume
+
+Responsibilities:
+- Detect whether a scheduling action should be performed
+- Propose available time slots when needed
+- Validate and confirm candidate-selected slots
+- Book interviews when confirmation is clear
+- Handle partial scheduling + information requests via handoff_to="info"
+
+Output Contract:
+{
+  "decision": "SCHEDULE" or "NONE",
+  "assistant_message": "string",
+  "selected_slot": {"date": "...", "time": "..."} or null,
+  "offered_slots": [...],
+  "booking_confirmed": true/false,
+  "handoff_to": "info" or null,
+  "state_update": {...}
+}
+
+Notes:
+- "SCHEDULE" means active scheduling flow
+- "NONE" means no scheduling action should be taken in this turn
+- The main agent is responsible for orchestration and combining responses
+"""
+
 import json
 
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.tools import tool
-
+from langchain_core.messages import HumanMessage, AIMessage
 from app.modules.scheduling.schedule_tools import execute_schedule_tool
 
 
@@ -16,8 +57,6 @@ DEFAULT_POSITION = "Python Dev"
 def get_slots(start_date: str):
     """
     Get the 3 nearest available interview slots starting from a given date.
-
-    Use this when the candidate wants to schedule or asks for available times.
     """
     return json.dumps(
         execute_schedule_tool(
@@ -35,8 +74,6 @@ def get_slots(start_date: str):
 def validate(date: str, time: str):
     """
     Check if a specific interview slot is available.
-
-    Use this when the candidate proposes or confirms a date and time.
     """
     return json.dumps(
         execute_schedule_tool(
@@ -54,8 +91,6 @@ def validate(date: str, time: str):
 def book(date: str, time: str):
     """
     Book an interview slot if it is available.
-
-    Use this only after validating that the slot is available.
     """
     return json.dumps(
         execute_schedule_tool(
@@ -77,19 +112,32 @@ def build_schedule_advisor(model):
                 """
 You are the scheduling advisor for a recruiting chatbot.
 
-You are called only when the main agent has already decided that scheduling
-is the primary action for this turn.
+You are called when scheduling is the primary action for this turn.
 
 Use FULL chat history.
 
 Important:
-- "yes", "ok", "that works", "Wednesday works", and similar short replies may confirm a previously suggested time
-- You MUST interpret short confirmations from context
+- Short replies like "yes", "ok", "that works", "Wednesday works" may confirm a previously suggested time
+- Interpret short confirmations using context
 - If the candidate proposes a date and time, validate that slot
-- If the candidate asks to schedule but no exact slot is confirmed yet, offer the 3 nearest available slots
-- If a slot is available and the candidate clearly selected it, book it
+- If the candidate wants to schedule but no exact slot is confirmed yet, offer the 3 nearest available slots
+- If a slot is available and clearly selected, book it
 - If the requested slot is not available, offer alternatives
-- Return NONE only if scheduling truly cannot proceed from the current message
+- If the candidate also asks a job-related question, handle the scheduling part and set handoff_to = "info"
+
+Closing behavior (very important):
+
+- When booking_confirmed = true AND the user message does NOT include any additional question:
+  - The assistant_message MUST include:
+    1. the booking confirmation
+    2. a short polite closing remark (e.g., "Looking forward to speaking with you.")
+
+- When booking_confirmed = true AND the user message ALSO includes an information question:
+  - The assistant_message MUST include ONLY the booking confirmation
+  - DO NOT include a closing remark
+  - DO NOT answer the information question
+  - DO NOT mention handoff, routing, or that another part will be handled separately
+  - Set handoff_to = "info"
 
 Return JSON ONLY in this exact shape:
 
@@ -98,17 +146,22 @@ Return JSON ONLY in this exact shape:
   "assistant_message": "string",
   "selected_slot": {{"date": "YYYY-MM-DD", "time": "HH:MM:SS"}} or null,
   "offered_slots": [{{"date": "YYYY-MM-DD", "time": "HH:MM:SS"}}],
-  "booking_confirmed": true or false
+  "booking_confirmed": true or false,
+  "handoff_to": "info" or null
 }}
 
 Rules:
-- If you are actively proposing, negotiating, validating, or confirming an interview time, decision = "SCHEDULE"
+- If you are actively proposing, negotiating, validating, or confirming interview time, decision = "SCHEDULE"
 - If you cannot perform a scheduling step from the current message, decision = "NONE"
-- If decision = "NONE", assistant_message should be an empty string
+- If decision = "NONE", assistant_message should be empty
 - Return valid JSON only
+If the message also includes an information question, handle ONLY the scheduling part in assistant_message.
+Do not answer the information question.
+Do not mention handoff, team, routing, or that another part of the message will be handled separately.
+Set handoff_to = "info" internally when needed.
 """.strip(),
             ),
-            ("system", "Chat history:\n{chat_history}"),
+            MessagesPlaceholder(variable_name="history"),
             ("user", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
@@ -120,7 +173,7 @@ Rules:
         llm=model,
         tools=tools,
         prompt=prompt,
-    )   
+    )
 
     return AgentExecutor(
         agent=agent,
@@ -131,11 +184,12 @@ Rules:
 
 def run_schedule_advisor(schedule_advisor, chat_history, state):
     user_message = get_last_user_message(chat_history)
+    history_messages = convert_to_langchain_messages(chat_history[:-1])
 
     response = schedule_advisor.invoke(
         {
             "input": user_message,
-            "chat_history": format_history(chat_history),
+            "history": history_messages,
             "agent_scratchpad": [],
         }
     )
@@ -143,10 +197,11 @@ def run_schedule_advisor(schedule_advisor, chat_history, state):
     data = safe_parse(response.get("output", ""))
 
     decision = data.get("decision", "NONE")
-    assistant_message = data.get("assistant_message", "")
+    assistant_message = data.get("assistant_message", "").strip()
     selected_slot = data.get("selected_slot")
     offered_slots = data.get("offered_slots", [])
     booking_confirmed = data.get("booking_confirmed", False)
+    handoff_to = data.get("handoff_to")
 
     return {
         "decision": decision,
@@ -154,6 +209,7 @@ def run_schedule_advisor(schedule_advisor, chat_history, state):
         "selected_slot": selected_slot,
         "offered_slots": offered_slots,
         "booking_confirmed": booking_confirmed,
+        "handoff_to": handoff_to,
         "state_update": {
             "schedule_state": {
                 "active": decision == "SCHEDULE" and not booking_confirmed,
@@ -173,11 +229,22 @@ def get_last_user_message(history):
     return ""
 
 
-def format_history(history):
-    return "\n".join(
-        f"{message['role'].upper()}: {message['content']}"
-        for message in history
-    )
+def convert_to_langchain_messages(history):
+    messages = []
+
+    for message in history:
+        role = message.get("role")
+        content = message.get("content", "")
+
+        if not content:
+            continue
+
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+
+    return messages
 
 
 def safe_parse(text):
@@ -190,4 +257,5 @@ def safe_parse(text):
             "selected_slot": None,
             "offered_slots": [],
             "booking_confirmed": False,
+            "handoff_to": None,
         }

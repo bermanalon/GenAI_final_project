@@ -2,11 +2,6 @@
 
 """
 Streamlit UI for the Recruiting Chatbot.
-
-This module handles:
-- Candidate registration
-- Chat interface
-- Display of conversation history and current state
 """
 
 import os
@@ -84,7 +79,7 @@ def format_state(state):
 
 
 def render_registration_screen():
-    left_spacer, center_col, right_spacer = st.columns([1, 1.7, 1])
+    _, center_col, _ = st.columns([1, 1.7, 1])
 
     with center_col:
         with st.container(border=True):
@@ -124,9 +119,8 @@ def render_registration_screen():
                         {
                             "role": "assistant",
                             "content": (
-                                f"Hello {full_name}, thank you for applying to the Python Developer position. "
-                                "I can answer questions about the role and help with next steps in the process. "
-                                "How can I help you today?"
+                                f"Hello {full_name}, thanks for submitting your application for our Python Developer role. "
+                                "Could you share a bit about your Python experience?"
                             ),
                         }
                     ]
@@ -170,19 +164,11 @@ def render_chat_screen(agents):
                         conversation_state=st.session_state.conversation_state,
                     )
 
-                assistant_message = result["assistant_message"]
-                updated_state = result["conversation_state"]
-                end_session = result.get("end_session", False)
-
                 st.session_state.messages.append(
-                    {"role": "assistant", "content": assistant_message}
+                    {"role": "assistant", "content": result["assistant_message"]}
                 )
-                st.session_state.conversation_state = updated_state
-
-                if end_session:
-                    st.session_state.end_session = True
-                    st.rerun()
-                    return
+                st.session_state.conversation_state = result["conversation_state"]
+                st.session_state.end_session = result.get("end_session", False)
 
             except Exception as e:
                 st.session_state.api_error = f"API error: {str(e)}"
@@ -209,7 +195,7 @@ def render_chat_screen(agents):
 
             if st.session_state.end_session:
                 st.warning("Conversation ended")
-            
+
             st.divider()
 
             if st.button("Start Over", use_container_width=True):

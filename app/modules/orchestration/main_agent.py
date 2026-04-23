@@ -13,6 +13,7 @@ from app.modules.orchestration.info_agent import run_info_advisor
 
 
 MEMORY_STORE = {}
+MAX_ADVISOR_CALLS_PER_TURN = 2
 
 
 def get_history(session_id):
@@ -32,7 +33,7 @@ end
 
 Definitions:
 - continue: continue the conversation, answer questions, gather more information, or send a mainly informational reply
-- schedule: actively move the conversation through interview scheduling, including proposing, negotiating, or confirming an interview meeting
+- schedule: handle anything directly related to interview scheduling, including proposing, negotiating, confirming, validating, booking, or answering questions about the interview slot or booking status
 - end: end the conversation because the candidate is no longer interested, asked to stop, or the conversation has already been fully concluded with no further substantive reply needed
 
 Important rules:
@@ -104,6 +105,7 @@ Return only the label, with no explanation.
 def run_main_agent(
     main_agent,
     exit_advisor,
+    exit_message_model,
     schedule_advisor,
     info_advisor,
     applicant_info,
@@ -120,26 +122,22 @@ def run_main_agent(
 
     user_message = get_latest_user_message(chat_history).strip()
     append_user_turn(state, user_message)
-
     state["turn_count"] = state.get("turn_count", 0) + 1
 
-    # 1. EXIT ADVISOR FIRST
     exit_result = run_exit_advisor(
         exit_advisor=exit_advisor,
+        exit_message_model=exit_message_model,
         chat_history=chat_history,
         conversation_state=state,
-    )
-
+    )   
     state = apply_state_update(state, exit_result.get("state_update", {}))
 
     if exit_result["decision"] == "END":
-        assistant_text = exit_result["assistant_message"].strip()
-
+        assistant_text = exit_result.get("assistant_message", "").strip()
         if not assistant_text:
             assistant_text = "Thank you for the update. I wish you the best."
 
         append_assistant_turn(state, assistant_text, "end")
-
         state["status"] = "ended"
         state["last_action"] = "end"
         state["main_state"]["route"] = "end"
@@ -151,82 +149,75 @@ def run_main_agent(
             "end_session": True,
         }
 
-    # 2. MAIN ROUTING
-    route = get_main_route(
-        main_agent=main_agent,
-        state=state,
-        user_message=user_message,
-    )
-
-    # Exit remains owned by the exit advisor
+    route = get_main_route(main_agent, state, user_message)
     if route == "end":
         route = "continue"
 
     state["main_state"]["route"] = route
 
-    # 3. EXECUTE ONE PRIMARY ADVISOR ONLY
+    advisor_calls = 0
+    primary_result = None
+    secondary_result = None
+
     if route == "schedule":
-        advisor_result = run_schedule_advisor(
+        primary_result = run_schedule_advisor(
             schedule_advisor=schedule_advisor,
             chat_history=chat_history,
             state=state,
         )
-
-        state = apply_state_update(state, advisor_result.get("state_update", {}))
-
-        assistant_text = advisor_result.get("assistant_message", "").strip()
-
-        if assistant_text:
-            final_decision = "schedule"
-            label = "schedule"
-
-            if state["schedule_state"].get("booking_confirmed"):
-                state["status"] = "scheduled"
-            else:
-                state["status"] = "scheduling"
-
-            state["last_action"] = "schedule"
-        else:
-            info_result = run_info_advisor(
-                info_advisor=info_advisor,
-                chat_history=chat_history,
-                state=state,
-            )
-            state = apply_state_update(state, info_result.get("state_update", {}))
-
-            assistant_text = info_result.get("assistant_message", "").strip()
-            final_decision = "continue"
-            label = "continue"
-            state["status"] = "active"
-            state["last_action"] = "continue"
-
     else:
-        info_result = run_info_advisor(
+        primary_result = run_info_advisor(
             info_advisor=info_advisor,
             chat_history=chat_history,
             state=state,
         )
 
-        state = apply_state_update(state, info_result.get("state_update", {}))
+    advisor_calls += 1
+    state = apply_state_update(state, primary_result.get("state_update", {}))
 
-        assistant_text = info_result.get("assistant_message", "").strip()
-        final_decision = "continue"
-        label = "continue"
-        state["status"] = "active"
-        state["last_action"] = "continue"
+    handoff_to = primary_result.get("handoff_to")
+    if handoff_to and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN:
+        if handoff_to == "schedule":
+            secondary_result = run_schedule_advisor(
+                schedule_advisor=schedule_advisor,
+                chat_history=chat_history,
+                state=state,
+            )
+        elif handoff_to == "info":
+            secondary_result = run_info_advisor(
+                info_advisor=info_advisor,
+                chat_history=chat_history,
+                state=state,
+            )
+
+        if secondary_result:
+            advisor_calls += 1
+            state = apply_state_update(state, secondary_result.get("state_update", {}))
+
+    assistant_text = build_final_message(primary_result, secondary_result)
+    final_decision = decide_final_label(route, primary_result, secondary_result, assistant_text)
 
     if not assistant_text:
         assistant_text = "Could you please clarify?"
+        final_decision = "continue"
 
+    if final_decision == "end":
+        state["status"] = "ended"
+    elif final_decision == "schedule":
+        state["status"] = "scheduled" if state["schedule_state"].get("booking_confirmed") else "scheduling"
+    else:
+        state["status"] = "active"
+    
+    state["last_action"] = final_decision
     state["main_state"]["final_decision"] = final_decision
-    append_assistant_turn(state, assistant_text, label)
+    
+    append_assistant_turn(state, assistant_text, final_decision)
 
     return {
         "assistant_message": assistant_text,
         "conversation_state": state,
-        "end_session": False,
-    }
-
+        "end_session": final_decision == "end",
+    }   
 
 def get_main_route(main_agent, state, user_message):
     try:
@@ -243,15 +234,56 @@ def get_main_route(main_agent, state, user_message):
         )
 
         output_text = response["output"].strip().lower()
-
         if output_text in ["continue", "schedule", "end"]:
             return output_text
-
     except Exception:
         pass
 
     return "continue"
 
+
+def build_final_message(primary_result, secondary_result):
+    parts = []
+
+    primary_text = (primary_result or {}).get("assistant_message", "").strip()
+    secondary_text = (secondary_result or {}).get("assistant_message", "").strip()
+
+    if primary_text:
+        parts.append(primary_text)
+
+    if secondary_text and secondary_text != primary_text:
+        parts.append(secondary_text)
+
+    return "\n\n".join(parts).strip()
+
+
+def decide_final_label(route, primary_result, secondary_result, assistant_text):
+    if not assistant_text:
+        return "continue"
+
+    booking_confirmed = False
+
+    for result in [primary_result, secondary_result]:
+        if result and result.get("booking_confirmed"):
+            booking_confirmed = True
+            break
+
+    if booking_confirmed:
+        secondary_text = (secondary_result or {}).get("assistant_message", "").strip()
+
+        # Mixed booking-confirmation + another answered part -> keep conversation open
+        if secondary_text:
+            return "continue"
+
+        # Pure booking confirmation -> end
+        return "end"
+
+    if route == "schedule":
+        primary_decision = (primary_result or {}).get("decision", "")
+        if primary_decision == "SCHEDULE":
+            return "schedule"
+
+    return "continue"
 
 def apply_state_update(state, update):
     for key, value in update.get("top_level", {}).items():
