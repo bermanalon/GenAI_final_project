@@ -32,53 +32,23 @@ schedule
 end
 
 Definitions:
-- continue: continue the conversation, answer questions, gather more information, or send a mainly informational reply
-- schedule: handle anything directly related to interview scheduling, including proposing, negotiating, confirming, validating, booking, or answering questions about the interview slot or booking status
-- end: end the conversation because the candidate is no longer interested, asked to stop, or the conversation has already been fully concluded with no further substantive reply needed
+- continue: the next assistant reply should mainly answer questions, provide information, or gather more details
+- schedule: the next assistant reply should mainly handle interview scheduling (propose, validate, confirm, or book a slot)
+- end: the conversation should be concluded
 
-Important rules:
-- If the candidate asks for information or the recruiter is mainly answering a question, return continue
-- If the recruiter message mainly provides information, return continue even if it also mentions that the interview is confirmed or booked
-- Use end only when the message mainly closes the conversation, such as a short wrap-up after booking, a goodbye, or acknowledging opt-out
-- If the conversation is actively choosing, proposing, changing, negotiating, or setting up an interview, return schedule
-- If the recruiter’s message is mostly informational and only lightly suggests a future meeting for the first time, prefer continue over schedule
-- If the candidate opts out, is no longer interested, asks to stop, or the conversation is clearly concluded, return end
+Rules:
+- If the candidate asks a question → continue
+- If the next assistant reply should gather more information about the candidate → continue
+- If the conversation is already in scheduling flow (proposing or confirming slots) → schedule
+- If the candidate expresses interest or provides relevant experience and no further clarification is needed → schedule
+- If the candidate opts out or asks to stop → end
+- If the interview is clearly confirmed and no further response is needed → end
 
-Important adaptation for this system:
-- Use the full conversation and decide the single best next action for the chatbot
-- Even if both scheduling and information appear in the latest turn, choose only one label:
-  - choose continue when the next assistant reply should mainly answer, explain, or gather information
-  - choose schedule when the next assistant reply should mainly propose, validate, negotiate, or confirm an interview slot
-- Do not return JSON
-- Do not explain your answer
+Important:
+- Choose only ONE label
+- If unsure between continue and schedule, prefer continue (more natural behavior)
 
-Borderline examples:
-
-Example 1:
-CHAT:
-RECRUITER: Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?
-CANDIDATE: I've been using Python professionally for five years, mostly for data analysis.
-RECRUITER: Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?
-CANDIDATE: Tuesday at 10 AM works. But can I get more details about the position?
-RECRUITER: Great, your interview is confirmed. Sure, We're looking for a skilled Python Developer with expertise in Python 3 and experience working with frameworks such as Django, Flask, or FastAPI. The ideal candidate should be familiar with building RESTful APIs, working with SQL or NoSQL databases, and using version control systems like Git.
-
-LABEL:
-continue
-
-Example 2:
-CHAT:
-RECRUITER: Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?
-CANDIDATE: I have three years' experience with Pyhon and AWS.
-RECRUITER: Could you elaborate on your experience with cloud platforms like AWS?
-CANDIDATE: I've worked a bit with AWS, mainly for deploying small apps and managing storage, but I'm still gaining experience and open to learning more.
-RECRUITER: I see, the role focuses on building backend services in Python, mainly FastAPI.
-CANDIDATE: Sounds very interesting, I'm confident I can handle it
-RECRUITER: Great, Can we set up a meeting next Tuesday
-
-LABEL:
-schedule
-
-Return only the label, with no explanation.
+Return only the label.
 """.strip()
 
     prompt = ChatPromptTemplate.from_messages(
@@ -150,6 +120,10 @@ def run_main_agent(
         }
 
     route = get_main_route(main_agent, state, user_message)
+    
+    print("DEBUG user_message:", repr(user_message))
+    print("DEBUG route:", route)
+    
     if route == "end":
         route = "continue"
 
@@ -175,7 +149,18 @@ def run_main_agent(
     advisor_calls += 1
     state = apply_state_update(state, primary_result.get("state_update", {}))
 
+    print("DEBUG primary_result:", primary_result)
+
     handoff_to = primary_result.get("handoff_to")
+
+    print("DEBUG handoff_to (before fix):", handoff_to)
+
+    if route == "continue" and not handoff_to:
+        if primary_result.get("decision") == "NONE":
+            handoff_to = "schedule"
+
+    print("DEBUG handoff_to (after fix):", handoff_to)
+     
     if handoff_to and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN:
         if handoff_to == "schedule":
             secondary_result = run_schedule_advisor(
@@ -193,10 +178,16 @@ def run_main_agent(
         if secondary_result:
             advisor_calls += 1
             state = apply_state_update(state, secondary_result.get("state_update", {}))
-
+    
+    print("DEBUG secondary_result:", secondary_result)
+    
     assistant_text = build_final_message(primary_result, secondary_result)
+    
+    print("DEBUG assistant_text before fallback:", repr(assistant_text))
+    
     final_decision = decide_final_label(route, primary_result, secondary_result, assistant_text)
 
+            # fallback
     if not assistant_text:
         assistant_text = "Could you please clarify?"
         final_decision = "continue"
@@ -207,10 +198,10 @@ def run_main_agent(
         state["status"] = "scheduled" if state["schedule_state"].get("booking_confirmed") else "scheduling"
     else:
         state["status"] = "active"
-    
+
     state["last_action"] = final_decision
     state["main_state"]["final_decision"] = final_decision
-    
+
     append_assistant_turn(state, assistant_text, final_decision)
 
     return {
