@@ -146,7 +146,7 @@ def render_chat_screen(agents):
                 st.error(st.session_state.api_error)
 
         if st.session_state.end_session:
-            st.info("This conversation has ended. To begin a new conversation, click Start Over.")
+            st.info("This conversation has ended")
             user_input = None
         else:
             user_input = st.chat_input("Write your message here...")
@@ -185,22 +185,22 @@ def render_chat_screen(agents):
 
             st.divider()
 
-            state_value = st.session_state.conversation_state.get("status", "new")
-            last_action = st.session_state.conversation_state.get("last_action", "none")
+#            state_value = st.session_state.conversation_state.get("status", "new")
+#            last_action = st.session_state.conversation_state.get("last_action", "none")
 
-            st.write("**Current State**")
-            st.write(format_state(state_value))
-            st.write("**Last Action**")
-            st.write(last_action)
+#            st.write("**Current State**")
+#            st.write(format_state(state_value))
+#            st.write("**Last Action**")
+#            st.write(last_action)
 
             if st.session_state.end_session:
                 st.warning("Conversation ended")
 
-            st.divider()
+#            st.divider()
 
-            if st.button("Start Over", use_container_width=True):
-                reset_app()
-                st.rerun()
+#            if st.button("Start Over", use_container_width=True):
+#                reset_app()
+#                st.rerun()
 
 
 def main():

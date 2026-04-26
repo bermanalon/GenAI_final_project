@@ -35,16 +35,18 @@ Return END only when the conversation should clearly be concluded, for example:
 - The candidate asks to stop being contacted
 - The candidate says they found another job
 - The interaction has naturally concluded after scheduling or final closure
+- The candidate softly disengages or cools off, for example:
+  "I'll reach out if it becomes relevant",
+  "I'll get back to you",
+  "I'll contact you if my availability changes"
 
 Return CONTINUE when:
-- the candidate is still engaged
-- the candidate asks questions
-- the candidate wants more information
-- the candidate wants to schedule or continue the process
-- there is any reasonable doubt
+- the candidate is still engaged or participating in the process
+- the candidate asks questions or wants more information
+- the candidate is discussing availability or scheduling, even if a specific time does not work
 
 Rules:
-- Prefer CONTINUE if unsure.
+- Prefer CONTINUE if unsure, EXCEPT when the candidate clearly signals they want to pause, delay, or disengage from the process.
 - Return only END or CONTINUE.
 - Do not explain your answer.
 

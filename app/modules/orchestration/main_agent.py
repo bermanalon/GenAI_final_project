@@ -40,7 +40,7 @@ Rules:
 - If the candidate asks a question → continue
 - If the next assistant reply should gather more information about the candidate → continue
 - If the conversation is already in scheduling flow (proposing or confirming slots) → schedule
-- If the candidate expresses interest or provides relevant experience and no further clarification is needed → schedule
+- If the candidate provides experience/background but does not explicitly ask to schedule, return continue so the Info Advisor can assess relevance and decide whether to ask more or move toward scheduling.
 - If the candidate opts out or asks to stop → end
 - If the interview is clearly confirmed and no further response is needed → end
 
@@ -120,10 +120,7 @@ def run_main_agent(
         }
 
     route = get_main_route(main_agent, state, user_message)
-    
-    print("DEBUG user_message:", repr(user_message))
-    print("DEBUG route:", route)
-    
+       
     if route == "end":
         route = "continue"
 
@@ -149,17 +146,11 @@ def run_main_agent(
     advisor_calls += 1
     state = apply_state_update(state, primary_result.get("state_update", {}))
 
-    print("DEBUG primary_result:", primary_result)
-
     handoff_to = primary_result.get("handoff_to")
-
-    print("DEBUG handoff_to (before fix):", handoff_to)
 
     if route == "continue" and not handoff_to:
         if primary_result.get("decision") == "NONE":
             handoff_to = "schedule"
-
-    print("DEBUG handoff_to (after fix):", handoff_to)
      
     if handoff_to and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN:
         if handoff_to == "schedule":
@@ -179,11 +170,23 @@ def run_main_agent(
             advisor_calls += 1
             state = apply_state_update(state, secondary_result.get("state_update", {}))
     
-    print("DEBUG secondary_result:", secondary_result)
     
+    
+    if (
+        route == "schedule"
+        and primary_result.get("decision") == "NONE"
+        and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN
+    ):
+        secondary_result = run_info_advisor(
+            info_advisor=info_advisor,
+            chat_history=chat_history,
+            state=state,
+        )
+
+        advisor_calls += 1
+        state = apply_state_update(state, secondary_result.get("state_update", {}))
+
     assistant_text = build_final_message(primary_result, secondary_result)
-    
-    print("DEBUG assistant_text before fallback:", repr(assistant_text))
     
     final_decision = decide_final_label(route, primary_result, secondary_result, assistant_text)
 
@@ -260,18 +263,18 @@ def decide_final_label(route, primary_result, secondary_result, assistant_text):
             break
 
     if booking_confirmed:
-        secondary_text = (secondary_result or {}).get("assistant_message", "").strip()
+        handoff_to_info = any(
+            result and result.get("handoff_to") == "info"
+            for result in [primary_result, secondary_result]
+        )
 
-        # Mixed booking-confirmation + another answered part -> keep conversation open
-        if secondary_text:
+        if handoff_to_info:
             return "continue"
 
-        # Pure booking confirmation -> end
         return "end"
 
-    if route == "schedule":
-        primary_decision = (primary_result or {}).get("decision", "")
-        if primary_decision == "SCHEDULE":
+    for result in [primary_result, secondary_result]:
+        if result and result.get("decision") == "SCHEDULE":
             return "schedule"
 
     return "continue"
