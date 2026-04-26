@@ -12,24 +12,56 @@ including:
 All database queries are implemented here.
 """
 
+import os
 import pyodbc
+from dotenv import load_dotenv
 
+load_dotenv()
 
-SERVER = "ALONBOOK"
-DATABASE = "Tech"
-DRIVER = "ODBC Driver 17 for SQL Server"
+DB_DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+DB_SERVER = os.getenv("DB_SERVER")
+DB_DATABASE = os.getenv("DB_DATABASE", "Tech")
+DB_USERNAME = os.getenv("DB_USERNAME")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
+#SERVER = "ALONBOOK"
+#DATABASE = "Tech"
+#DRIVER = "ODBC Driver 17 for SQL Server"
+
 DEFAULT_POSITION = "Python Dev"
 
 
-def get_connection():
-    conn_str = (
-        f"DRIVER={{{DRIVER}}};"
-        f"SERVER={SERVER};"
-        f"DATABASE={DATABASE};"
-        "Trusted_Connection=yes;"
-    )
-    return pyodbc.connect(conn_str)
+#def get_connection():
+#    conn_str = (
+#        f"DRIVER={{{DRIVER}}};"
+#        f"SERVER={SERVER};"
+#        f"DATABASE={DATABASE};"
+#        "Trusted_Connection=yes;"
+#    )
+#    return pyodbc.connect(conn_str)
 
+def get_connection():
+    use_trusted_connection = os.getenv("DB_TRUSTED_CONNECTION", "no").lower() == "yes"
+
+    if use_trusted_connection:
+        conn_str = (
+            f"DRIVER={{{DB_DRIVER}}};"
+            f"SERVER={DB_SERVER};"
+            f"DATABASE={DB_DATABASE};"
+            "Trusted_Connection=yes;"
+        )
+    else:
+        conn_str = (
+            f"DRIVER={{{DB_DRIVER}}};"
+            f"SERVER={DB_SERVER};"
+            f"DATABASE={DB_DATABASE};"
+            f"UID={DB_USERNAME};"
+            f"PWD={DB_PASSWORD};"
+            "Encrypt=yes;"
+            "TrustServerCertificate=yes;"
+        )
+
+    return pyodbc.connect(conn_str)
 
 def row_to_slot_dict(row):
     return {
