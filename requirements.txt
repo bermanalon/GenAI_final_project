@@ -2,6 +2,7 @@ streamlit
 openai
 python-dotenv
 pyodbc
+protobuf==3.20.3
 
 # LangChain stack
 langchain
