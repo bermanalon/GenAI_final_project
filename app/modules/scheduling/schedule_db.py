@@ -30,7 +30,7 @@ def get_setting(name, default=None):
 
 
 def get_connection():
-    driver = get_setting("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+    driver = get_setting("DB_DRIVER", "ODBC Driver 17 for SQL Server")
     server = get_setting("DB_SERVER", "ALONBOOK")
     database = get_setting("DB_DATABASE", "Tech")
     username = get_setting("DB_USERNAME")
