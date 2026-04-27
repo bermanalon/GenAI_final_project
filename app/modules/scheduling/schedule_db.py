@@ -14,51 +14,46 @@ All database queries are implemented here.
 
 import os
 import pyodbc
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
-DB_SERVER = os.getenv("DB_SERVER")
-DB_DATABASE = os.getenv("DB_DATABASE", "Tech")
-DB_USERNAME = os.getenv("DB_USERNAME")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-#SERVER = "ALONBOOK"
-#DATABASE = "Tech"
-#DRIVER = "ODBC Driver 17 for SQL Server"
 
 DEFAULT_POSITION = "Python Dev"
 
 
-#def get_connection():
-#    conn_str = (
-#        f"DRIVER={{{DRIVER}}};"
-#        f"SERVER={SERVER};"
-#        f"DATABASE={DATABASE};"
-#        "Trusted_Connection=yes;"
-#    )
-#    return pyodbc.connect(conn_str)
+def get_setting(name, default=None):
+    try:
+        import streamlit as st
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        pass
+
+    return os.getenv(name, default)
+
 
 def get_connection():
-    use_trusted_connection = os.getenv("DB_TRUSTED_CONNECTION", "no").lower() == "yes"
+    driver = get_setting("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+    server = get_setting("DB_SERVER", "ALONBOOK")
+    database = get_setting("DB_DATABASE", "Tech")
+    username = get_setting("DB_USERNAME")
+    password = get_setting("DB_PASSWORD")
+    encrypt = get_setting("DB_ENCRYPT", "yes")
+    trust_cert = get_setting("DB_TRUST_SERVER_CERTIFICATE", "yes")
 
-    if use_trusted_connection:
+    if username and password:
         conn_str = (
-            f"DRIVER={{{DB_DRIVER}}};"
-            f"SERVER={DB_SERVER};"
-            f"DATABASE={DB_DATABASE};"
-            "Trusted_Connection=yes;"
+            f"DRIVER={{{driver}}};"
+            f"SERVER={server};"
+            f"DATABASE={database};"
+            f"UID={username};"
+            f"PWD={password};"
+            f"Encrypt={encrypt};"
+            f"TrustServerCertificate={trust_cert};"
         )
     else:
         conn_str = (
-            f"DRIVER={{{DB_DRIVER}}};"
-            f"SERVER={DB_SERVER};"
-            f"DATABASE={DB_DATABASE};"
-            f"UID={DB_USERNAME};"
-            f"PWD={DB_PASSWORD};"
-            "Encrypt=yes;"
-            "TrustServerCertificate=yes;"
+            f"DRIVER={{{driver}}};"
+            f"SERVER={server};"
+            f"DATABASE={database};"
+            "Trusted_Connection=yes;"
         )
 
     return pyodbc.connect(conn_str)
