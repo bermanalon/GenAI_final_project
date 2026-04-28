@@ -11,7 +11,7 @@ including:
 
 All database queries are implemented here.
 """
-
+import time
 import os
 import pyodbc
 
@@ -47,7 +47,18 @@ def get_connection():
             f"PWD={password};"
             f"Encrypt={encrypt};"
             f"TrustServerCertificate={trust_cert};"
+            "connection Timeout=30;"
         )
+        
+        # 🔁 Retry logic
+        for attempt in range(3):
+            try:
+                return pyodbc.connect(conn_str)
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                time.sleep(2)        
+        
     else:
         conn_str = (
             f"DRIVER={{{driver}}};"
