@@ -14,11 +14,13 @@ Design:
 - Uses the full conversation history via MessagesPlaceholder("history")
 - Receives the latest user message separately as "input"
 - Receives conversation state as additional context
+- Retrieves relevant job-description context from Chroma
 - Returns structured JSON for the main agent
 
 Current scope:
-- Uses simple built-in role facts
-- Can later be upgraded to use the job description PDF / vector DB
+- Uses RAG over the Python Developer Job Description PDF
+- Retrieves relevant chunks from an in-memory Chroma collection
+- Uses OpenAI embeddings with text-embedding-3-small
 """
 
 import json
