@@ -12,6 +12,8 @@ Supports function calling for:
 - Booking slots
 """
 
+from datetime import datetime, timedelta
+
 from app.modules.scheduling.schedule_db import (
     get_nearest_slots,
     get_available_slots_in_range,
@@ -23,13 +25,13 @@ from app.modules.scheduling.schedule_db import (
 SCHEDULE_TOOLS = [
     {
         "name": "get_nearest_slots",
-        "description": "Get the nearest available interview slots from a given start date for a job position.",
+        "description": "Get the nearest available interview slots from a given datetime for a job position. Never returns past slots.",
         "parameters": {
             "type": "object",
             "properties": {
                 "start_date": {
                     "type": "string",
-                    "description": "Start date in YYYY-MM-DD format"
+                    "description": "Start datetime in YYYY-MM-DD HH:MM:SS format"
                 },
                 "position": {
                     "type": "string",
@@ -40,7 +42,7 @@ SCHEDULE_TOOLS = [
                     "description": "Maximum number of slots to return"
                 }
             },
-            "required": ["start_date"]
+            "required": ["start_datetime"]
         }
     },
     {
@@ -51,8 +53,8 @@ SCHEDULE_TOOLS = [
             "properties": {
                 "start_date": {
                     "type": "string",
-                    "description": "Start date in YYYY-MM-DD format"
-                },
+                    "description": "Start datetime in YYYY-MM-DD HH:MM:SS format"
+                },              
                 "end_date": {
                     "type": "string",
                     "description": "End date in YYYY-MM-DD format"
@@ -66,7 +68,7 @@ SCHEDULE_TOOLS = [
                     "description": "Maximum number of slots to return"
                 }
             },
-            "required": ["start_date", "end_date"]
+            "required": ["start_datetime", "end_date"]
         }
     },
     {
@@ -129,7 +131,13 @@ def execute_schedule_tool(tool_name, args):
     """
 
     if tool_name == "get_nearest_slots":
-        start_date = args["start_date"]
+        start_date = args.get("start_date")
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # if missing OR in the past → force tomorrow
+        if not start_date or start_date < tomorrow:
+            start_date = tomorrow
+            
         position = args.get("position", "Python Dev")
         limit = args.get("limit", 3)
 
@@ -143,10 +151,16 @@ def execute_schedule_tool(tool_name, args):
             "success": True,
             "tool_name": tool_name,
             "slots": slots
-        }
+        }   
 
     elif tool_name == "get_available_slots_in_range":
-        start_date = args["start_date"]
+        start_date = args.get("start_date")
+        tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # if missing OR in the past → force tomorrow
+        if not start_date or start_date < tomorrow:
+            start_date = tomorrow   
+            
         end_date = args["end_date"]
         position = args.get("position", "Python Dev")
         limit = args.get("limit", 3)
@@ -215,7 +229,7 @@ if __name__ == "__main__":
     result = execute_schedule_tool(
         "get_nearest_slots",
         {
-            "start_date": "2026-03-27",
+            "start_date": "2026-04-29",
             "position": "Python Dev",
             "limit": 3
         }

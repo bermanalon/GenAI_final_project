@@ -6,7 +6,7 @@ Streamlit UI for the Recruiting Chatbot.
 
 import os
 import sys
-
+from datetime import datetime, timedelta
 import streamlit as st
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -19,6 +19,7 @@ from app.main import (
     process_user_message,
 )
 
+IDLE_TIMEOUT_MINUTES = 30
 
 st.set_page_config(
     page_title="Recruitment Chatbot",
@@ -37,7 +38,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 def initialize_session_state():
     defaults = create_initial_session_state()
     for key, value in defaults.items():
@@ -51,6 +51,30 @@ def reset_app():
     for key, value in defaults.items():
         st.session_state[key] = value
 
+def check_idle_timeout():
+    if not st.session_state.get("registration_submitted"):
+        return
+
+    last_activity = st.session_state.get("last_activity_at")
+    if not last_activity:
+        st.session_state.last_activity_at = datetime.now()
+        return
+
+    idle_time = datetime.now() - last_activity
+
+    if idle_time > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
+        st.session_state.conversation_state["status"] = "ended"
+        st.session_state.conversation_state["last_action"] = "end"
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": (
+                "It looks like the conversation was inactive for a while, "
+                "so I’ll close it for now. You can start over whenever you’re ready."
+            ),
+        })
+
+        st.session_state.registration_submitted = True
 
 def validate_registration(first_name, last_name, email, phone_number):
     errors = []
@@ -126,6 +150,7 @@ def render_registration_screen():
                     ]
 
                     st.session_state.registration_submitted = True
+                    st.session_state.last_activity_at = datetime.now()
                     st.rerun()
 
 
@@ -152,6 +177,7 @@ def render_chat_screen(agents):
             user_input = st.chat_input("Write your message here...")
 
         if user_input:
+            st.session_state.last_activity_at = datetime.now()
             st.session_state.api_error = ""
             st.session_state.messages.append({"role": "user", "content": user_input})
 
@@ -211,7 +237,8 @@ def main():
         st.stop()
 
     initialize_session_state()
-
+    check_idle_timeout()
+    
     st.title("Recruitment Chatbot")
 
     if not st.session_state.registration_submitted:

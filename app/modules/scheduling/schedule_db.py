@@ -14,11 +14,21 @@ All database queries are implemented here.
 import time
 import os
 import pyodbc
+from datetime import datetime
 
 DEFAULT_POSITION = "Python Dev"
 
 
 def get_setting(name, default=None):
+    """
+    Retrieve a configuration value.
+
+    Priority:
+    1. Streamlit secrets (cloud)
+    2. Environment variables (local / override)
+    3. Default value
+    """
+    # 1. Try Streamlit secrets (only works in Streamlit Cloud)
     try:
         import streamlit as st
         if name in st.secrets:
@@ -26,39 +36,35 @@ def get_setting(name, default=None):
     except Exception:
         pass
 
-    return os.getenv(name, default)
+    # 2. Try environment variables
+    value = os.getenv(name)
+    if value is not None:
+        return value
+
+    # 3. Fallback default
+    return default
 
 
 def get_connection():
+    env = get_setting("APP_ENV", "local")
+
     driver = get_setting("DB_DRIVER", "ODBC Driver 17 for SQL Server")
     server = get_setting("DB_SERVER", "ALONBOOK")
     database = get_setting("DB_DATABASE", "Tech")
     username = get_setting("DB_USERNAME")
     password = get_setting("DB_PASSWORD")
-    encrypt = get_setting("DB_ENCRYPT", "yes")
-    trust_cert = get_setting("DB_TRUST_SERVER_CERTIFICATE", "yes")
 
-    if username and password:
+    if env == "cloud":
         conn_str = (
             f"DRIVER={{{driver}}};"
             f"SERVER={server};"
             f"DATABASE={database};"
             f"UID={username};"
             f"PWD={password};"
-            f"Encrypt={encrypt};"
-            f"TrustServerCertificate={trust_cert};"
-            "connection Timeout=30;"
+            "Encrypt=yes;"
+            "TrustServerCertificate=yes;"
+            "Connection Timeout=30;"
         )
-        
-        # 🔁 Retry logic
-        for attempt in range(3):
-            try:
-                return pyodbc.connect(conn_str)
-            except Exception as e:
-                if attempt == 2:
-                    raise
-                time.sleep(2)        
-        
     else:
         conn_str = (
             f"DRIVER={{{driver}}};"
@@ -67,7 +73,13 @@ def get_connection():
             "Trusted_Connection=yes;"
         )
 
-    return pyodbc.connect(conn_str)
+    for attempt in range(3):
+        try:
+            return pyodbc.connect(conn_str)
+        except Exception:
+            if attempt == 2:
+                raise
+            time.sleep(2)
 
 def row_to_slot_dict(row):
     return {
@@ -77,19 +89,11 @@ def row_to_slot_dict(row):
         "position": row.position,
     }
 
-
-def get_nearest_slots(start_date, position=DEFAULT_POSITION, limit=3):
+def get_nearest_slots(start_date=None, position=DEFAULT_POSITION, limit=3):
     """
-    Return the nearest available interview slots on or after start_date.
-
-    Args:
-        start_date: string in format YYYY-MM-DD
-        position: job title, default is 'Python Dev'
-        limit: maximum number of slots to return
-
-    Returns:
-        List of dictionaries representing available slots.
+    Return nearest available interview slots from start_datetime onward.
     """
+
     query = """
         SELECT TOP (?)
             ScheduleID,
@@ -98,8 +102,8 @@ def get_nearest_slots(start_date, position=DEFAULT_POSITION, limit=3):
             position
         FROM dbo.Schedule
         WHERE [date] >= ?
-          AND LOWER(position) = LOWER(?)
-          AND available = 1
+            AND LOWER(position) = LOWER(?)
+            AND available = 1
         ORDER BY [date], [time]
     """
 
@@ -109,9 +113,7 @@ def get_nearest_slots(start_date, position=DEFAULT_POSITION, limit=3):
     cursor.execute(query, (limit, start_date, position))
     rows = cursor.fetchall()
 
-    results = []
-    for row in rows:
-        results.append(row_to_slot_dict(row))
+    results = [row_to_slot_dict(row) for row in rows]
 
     cursor.close()
     conn.close()
@@ -140,9 +142,9 @@ def get_available_slots_in_range(start_date, end_date, position=DEFAULT_POSITION
             position
         FROM dbo.Schedule
         WHERE [date] >= ?
-          AND [date] <= ?
-          AND LOWER(position) = LOWER(?)
-          AND available = 1
+            AND [date] <= ?     
+            AND LOWER(position) = LOWER(?)
+            AND available = 1
         ORDER BY [date], [time]
     """
 

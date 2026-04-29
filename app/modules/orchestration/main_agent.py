@@ -149,8 +149,12 @@ def run_main_agent(
     handoff_to = primary_result.get("handoff_to")
 
     if route == "continue" and not handoff_to:
-        if primary_result.get("decision") == "NONE":
-            handoff_to = "schedule"
+        if (
+            primary_result.get("decision") == "NONE"
+            and state.get("status") in ["active", "scheduling"]
+            and not state.get("schedule_state", {}).get("booking_confirmed")
+        ):
+            handoff_to = "schedule" 
      
     if handoff_to and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN:
         if handoff_to == "schedule":
