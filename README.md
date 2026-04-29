@@ -3,7 +3,7 @@
   <img src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Python-logo-notext.svg" alt="Logo" width="120" height="120">
 </p>
 
-<h1 align="center">My Python Project</h1>
+<h1 align="center">Recruitment Chatbot – Multi-Agent Orchestration</h1>
 
 <p align="center">
   A feature-rich Python project<br>
@@ -38,10 +38,43 @@
 
 ## About The Project
 
-> This project demonstrates a simple...<br>
+> This project implements a **multi-agent recruitment chatbot** designed to interact with job candidates for a Python Developer position.
+
+The chatbot simulates an SMS-based conversation (implemented via Streamlit for this PoC) and is responsible for guiding candidates through the recruitment process. Its main objectives are:
+
+- Collect and verify candidate information 
+- Answer questions about the role 
+- Progress the conversation toward scheduling an interview 
+- Politely end the conversation when appropriate 
+
+### Multi-Agent Architecture
+
+The system is built using a **modular multi-agent design**, where a central orchestrator (Main Agent) collaborates with specialized advisor agents:
+
+- **Main Agent** – Manages the conversation and decides the next action 
+- **Info Advisor** – Answers candidate questions using RAG over a job description PDF 
+- **Scheduling Advisor** – Suggests and validates interview time slots using a SQL database 
+- **Exit Advisor** – Determines when the conversation should end (fine-tuned model) 
+
+At each turn, the system selects one of three actions:
+
+- `CONTINUE` – keep the conversation going 
+- `SCHEDULE` – move toward booking an interview 
+- `END` – conclude the interaction 
+
+### Evaluation
+
+The system is evaluated using a labeled dataset of real conversations, where each turn is annotated with the correct action (`continue`, `schedule`, `end`). 
+
+Performance is measured using:
+- Accuracy 
+- Confusion Matrix 
+
+This project demonstrates how multi-agent orchestration, retrieval-augmented generation (RAG), and tool integration can be combined to build a realistic, goal-oriented conversational system.
+<br>
 
 <div style="background: #272822; color: #f8f8f2; padding: 10px; border-radius: 8px;">
-  <b> Technologies:</b> Python, Pandas, NumPy, Matplotlib, OpenAI API
+  <b> Technologies:</b> Python, Pandas, NumPy, Matplotlib, OpenAI API, Langchain, SQL Server, Streamlit, Chroma
 </div>
 
 ---
@@ -50,14 +83,20 @@
 
 ## Features
 
-- [x] Data loading and cleaning  
-- [x] Data handaling with Pandas & NumPy 
-- [x] Streamlit
-- [x] LangChain
-- [x] Agent Orchestration
-- [x] Modern Python project structure  
-- [x] <span style="color: green; font-weight: bold;">Easy customization</span>  
-- [ ] Cloud deployment _(coming soon!)_  
+- Multi-agent conversation orchestration (Main Agent + Advisors)
+- Intelligent routing between:
+  - Continue conversation
+  - Schedule interview
+  - End conversation
+- Retrieval-Augmented Generation (RAG) for answering job-related questions
+- Interview scheduling via SQL Server (function calling)
+- Natural language date handling (e.g., "next Monday")
+- Fine-tuned Exit Advisor for conversation termination decisions
+- Streamlit-based interactive chat interface
+- Conversation state management across turns
+- Evaluation framework using labeled conversations (accuracy & confusion matrix)
+ 
+- Cloud deployment  
 
 ---
 <br></br>
