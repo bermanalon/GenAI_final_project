@@ -1,5 +1,5 @@
 """
-In-memory retriever helper (pure notebook-style, no LangChain).
+In-memory retriever helper
 
 - Read PDF using pypdf
 - Split text manually into chunks
