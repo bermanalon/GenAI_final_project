@@ -61,17 +61,21 @@ Core behavior:
 2. Candidate relevance:
 - If the candidate provides clearly weak experience (e.g., only a few months, beginner level):
   → decision = "INFO"
-  → ask one short follow-up question.
+  → ask only one short follow-up question.
+    → If the candidate still provides clearly weak experience for the second time:
+      -> explain politely that this experience is not relevant to the position and end the conversation politely.
 
 - If the candidate provides moderate or strong relevant experience and does NOT ask a question:
   → decision = "INFO"
-  → respond with a short natural transition toward scheduling.
-  → do NOT set handoff_to = "schedule" in this case.
+  → assistant_message = ""
+  → handoff_to = "schedule"
+  → handoff_context = "Candidate appears relevant enough to move to interview scheduling."
 
 3. Mixed input:
 - If the message includes both a question and scheduling-related content:
   → answer ONLY the question.
   → set handoff_to = "schedule".
+  → handoff_context = "Candidate asked a job-related question and also included scheduling-related content."
 
 4. Short inputs:
 - If the message is very short (e.g., "ok", "thanks"):
@@ -92,7 +96,8 @@ Output JSON only:
 {{
   "decision": "INFO" or "NONE",
   "assistant_message": "string",
-  "handoff_to": "schedule" or null
+  "handoff_to": "schedule" or null,
+  "handoff_context": "string or null"
 }}
 
 Rules:
@@ -106,8 +111,9 @@ User: "I have 3 years of experience with Python and Flask"
 Output:
 {{
   "decision": "INFO",
-  "assistant_message": "That sounds relevant for the role. The next step would be to schedule an interview.",
-  "handoff_to": null
+  "assistant_message": "",
+  "handoff_to": "schedule",
+  "handoff_context": "Candidate appears relevant enough to move to interview scheduling."
 }}
 
 User: "I've been using Python for a couple of months"
@@ -115,7 +121,8 @@ Output:
 {{
   "decision": "INFO",
   "assistant_message": "Could you tell me more about the types of Python projects you've worked on?",
-  "handoff_to": null
+  "handoff_to": null,
+  "handoff_context": null
 }}
 
 User: "Is the position remote?"
@@ -124,7 +131,8 @@ Output:
 {{
   "decision": "INFO",
   "assistant_message": "I do not see a clear answer about that in the job description.",
-  "handoff_to": null
+  "handoff_to": null,
+  "handoff_context": null
 }}
 
 User: "OK"
@@ -133,7 +141,18 @@ Output:
 {{
   "decision": "INFO",
   "assistant_message": "Great — would you like to move forward with scheduling an interview?",
-  "handoff_to": null
+  "handoff_to": null,
+  "handoff_context": null
+}}
+
+User: "Monday works for me. Can you tell me more about the role"
+booking_confirmed: False
+Output:
+{{
+  "decision": "INFO",
+  "assistant_message": "The role involves Python development, data engineering work, and building data pipelines.",
+  "handoff_to": "schedule",
+  "handoff_context": "Candidate asked about the role and also selected an interview time."
 }}
 """.strip()
             ),
@@ -183,16 +202,18 @@ def run_info_advisor(info_advisor, chat_history, state):
         data = default_info_result()
 
     decision = data.get("decision", "NONE")
+    handoff_context = data.get("handoff_context")
     assistant_message = data.get("assistant_message", "").strip()
     handoff_to = data.get("handoff_to")
 
-    if decision == "INFO" and not assistant_message:
+    if decision == "INFO" and not assistant_message and not handoff_to:
         assistant_message = GENERIC_INFO_REPLY
 
     return {
         "decision": decision,
         "assistant_message": assistant_message,
         "handoff_to": handoff_to,
+        "handoff_context": handoff_context,
         "state_update": {
             "info_state": {
                 "last_info_decision": decision,
@@ -256,6 +277,7 @@ def safe_parse_info_output(text):
             "decision": decision,
             "assistant_message": data.get("assistant_message", ""),
             "handoff_to": handoff_to,
+            "handoff_context": data.get("handoff_context")
         }
 
     except Exception as e:

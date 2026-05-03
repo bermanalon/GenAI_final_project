@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pandas as pd
 from sklearn.metrics import confusion_matrix, accuracy_score
-from sklearn.metrics import classification_report
 
 from app.main import bootstrap_app, create_initial_session_state, process_user_message
 

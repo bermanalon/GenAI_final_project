@@ -109,6 +109,8 @@ def build_schedule_advisor(model):
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", "Current date: {current_date}"),
+            ("system", "Conversation state:\n{conversation_state}"),
+            ("system", "Handoff context:\n{handoff_context}"),
             ("system",
 """
 You are the Scheduling Advisor in a recruiting chatbot.
@@ -127,9 +129,9 @@ DECISION PRIORITY
 Always follow this order:
 
 0. Determine if scheduling is required:
-   - If the user message is clearly unrelated to scheduling OR scheduling is already completed:
-     → decision = "NONE"
-     → do not generate assistant_message
+- If handoff_context is provided, scheduling is required for this turn.
+- If handoff_context is empty AND the user message is clearly unrelated to scheduling OR scheduling is already completed:
+  → decision = "NONE"
 
 1. Identify the scheduling intent:
    - new request
@@ -142,8 +144,8 @@ Always follow this order:
 
 3. Use tools:
     - get_slots → when proposing availability
-    - validate → when checking a specific slot
-    - book → when booking
+    - validate → when checking availability of a specific slot
+    - book → when booking a slot
     
 4. Base your response strictly on tool results.
 
@@ -159,7 +161,7 @@ SCHEDULING BEHAVIOR
 
 1. Proposing slots:
 - If the candidate wants to schedule but no specific date/time is given:
-  → call get_slots using Current date
+  → call get_slots using one day after current date as start_date
   → offer the 3 nearest available slots
 
 2. Handling specific date/time:
@@ -167,7 +169,7 @@ SCHEDULING BEHAVIOR
   → validate it using validate_slot
 
 - If available:
-  → call book_slot
+  → call book
   → then confirm the booking
 
 - If not available:
@@ -298,7 +300,7 @@ OUTPUT FORMAT (JSON ONLY)
     )
 
 
-def run_schedule_advisor(schedule_advisor, chat_history, state):
+def run_schedule_advisor(schedule_advisor, chat_history, state, handoff_context=None):
     user_message = get_last_user_message(chat_history)
     history_messages = convert_to_langchain_messages(chat_history[:-1])
 
@@ -307,6 +309,8 @@ def run_schedule_advisor(schedule_advisor, chat_history, state):
             "input": user_message,
             "history": history_messages,
             "current_date": date.today().isoformat(),
+            "conversation_state": format_state(state),
+            "handoff_context": handoff_context or "",
             "agent_scratchpad": [],
         }
     )
@@ -376,3 +380,6 @@ def safe_parse(text):
             "booking_confirmed": False,
             "handoff_to": None,
         }
+        
+def format_state(state):
+    return "\n".join(f"{key}: {value}" for key, value in state.items())

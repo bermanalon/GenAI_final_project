@@ -37,16 +37,20 @@ Definitions:
 - end: the conversation should be concluded
 
 Rules:
-- If the candidate asks a question → continue
+- If the candidate asks a question not related to scheduling → continue
 - If the next assistant reply should gather more information about the candidate → continue
 - If the conversation is already in scheduling flow (proposing or confirming slots) → schedule
+- If schedule_state.active = true and the user message looks like a response to proposed interview slots,
+  → return schedule
 - If the candidate provides experience/background but does not explicitly ask to schedule, return continue so the Info Advisor can assess relevance and decide whether to ask more or move toward scheduling.
-- If the candidate opts out or asks to stop → end
-- If the interview is clearly confirmed and no further response is needed → end
+- If the candidate opts out or asks to stop → return end
+- If the candidate clearly wants to stop, is not interested, or the conversation is already fully closed -> end
 
 Important:
 - Choose only ONE label
-- If unsure between continue and schedule, prefer continue (more natural behavior)
+- If unsure between continue and schedule:
+  → If scheduling is active, prefer schedule
+  → otherwise prefer continue
 
 Return only the label.
 """.strip()
@@ -99,7 +103,8 @@ def run_main_agent(
         exit_message_model=exit_message_model,
         chat_history=chat_history,
         conversation_state=state,
-    )   
+    )
+    
     state = apply_state_update(state, exit_result.get("state_update", {}))
 
     if exit_result["decision"] == "END":
@@ -147,14 +152,6 @@ def run_main_agent(
     state = apply_state_update(state, primary_result.get("state_update", {}))
 
     handoff_to = primary_result.get("handoff_to")
-
-    if route == "continue" and not handoff_to:
-        if (
-            primary_result.get("decision") == "NONE"
-            and state.get("status") in ["active", "scheduling"]
-            and not state.get("schedule_state", {}).get("booking_confirmed")
-        ):
-            handoff_to = "schedule" 
      
     if handoff_to and advisor_calls < MAX_ADVISOR_CALLS_PER_TURN:
         if handoff_to == "schedule":
@@ -162,6 +159,7 @@ def run_main_agent(
                 schedule_advisor=schedule_advisor,
                 chat_history=chat_history,
                 state=state,
+                handoff_context=primary_result.get("handoff_context", ""),
             )
         elif handoff_to == "info":
             secondary_result = run_info_advisor(

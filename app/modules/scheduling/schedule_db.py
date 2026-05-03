@@ -46,7 +46,9 @@ def get_setting(name, default=None):
 
 
 def get_connection():
-    env = get_setting("APP_ENV", "local")
+    env = get_setting("APP_ENV", "local").lower()
+    if env not in ["local", "cloud"]:
+        raise ValueError(f"Invalid APP_ENV: {env}")
 
     driver = get_setting("DB_DRIVER", "ODBC Driver 17 for SQL Server")
     server = get_setting("DB_SERVER", "ALONBOOK")
