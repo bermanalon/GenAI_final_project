@@ -6,7 +6,7 @@
 <h1 align="center">Recruitment Chatbot – Multi-Agent Orchestration</h1>
 
 <p align="center">
-  A feature-rich Python project<br>
+  A Streamlit proof-of-concept for a multi-agent recruiting chatbot<br>
   <a href="#demo">View Demo</a>
   ·
   <a href="#demo">Report Bug</a>
@@ -74,7 +74,7 @@ This project demonstrates how multi-agent orchestration, retrieval-augmented gen
 <br>
 
 <div style="background: #272822; color: #f8f8f2; padding: 10px; border-radius: 8px;">
-  <b> Technologies:</b> Python, Pandas, NumPy, Matplotlib, OpenAI API, Langchain, SQL Server, Streamlit, Chroma
+  <b> Technologies:</b> Python, Pandas, NumPy, Matplotlib, OpenAI API, LangChain, SQL Server, Streamlit, Chroma
 </div>
 
 ---
@@ -95,7 +95,6 @@ This project demonstrates how multi-agent orchestration, retrieval-augmented gen
 - Streamlit-based interactive chat interface
 - Conversation state management across turns
 - Evaluation framework using labeled conversations (accuracy & confusion matrix)
- 
 - Cloud deployment  
 
 ---
@@ -103,39 +102,94 @@ This project demonstrates how multi-agent orchestration, retrieval-augmented gen
 
 
 ##  Getting Started
-Explain how to get started with the project...
 
 ### Prerequisites
 
-- Python >= 3.8
+- Python >= 3.12
 - pip
 
-### Installation
+## Live Demo
 
+You can access the deployed application to streamlit community cloud here:
+
+👉 https://genaifinalproject-mqr3xjd9xcr6ywglzoyz2n.streamlit.app/
+
+Note: Tech DB is deployed to Azure SQL, so connection on the first time can take longer
+
+### Running the application on a Windows machine
+
+Follow these steps to run the application on a Windows machine, using a local SQL Server database created with SSMS.
+
+#### 1. Clone the repository and create virtual environment
 ```bash
-git clone https://github.com/yourusername/python-project.git
-cd python-project
+git clone https://github.com/bermanalon/GenAI_final_project.git
+cd GenAI_final_project
+
+
+python -m venv .venv
+
+.venv\Scripts\activate 
+
 pip install -r requirements.txt
+
 ```
+#### 2. Configure environment variables
+Create a .env file based on the provided template:
+```bash
+copy .env.example .env
+```
+Edit the .env file and set the following values:
+```env
+OPENAI_API_KEY=your_api_key_here
+
+APP_ENV=local
+
+DB_DRIVER=ODBC Driver 17 for SQL Server
+DB_SERVER=your_sql_server
+DB_DATABASE=Tech
+```
+#### 3. Create Tech Data base
+Run the following script in SSMS to create and populate the database:
+```sql
+db_Tech.sql
+```
+The sample database may contain historical demo dates. If needed, update the dates to the current project year before testing scheduling flows.
+For example - you can use the following script (adding 2 years):
+```sql
+UPDATE dbo.Schedule
+SET [date] = DATEADD(YEAR, 2, [date]);
+```
+Note: it will cause scheduling slots to fall also on Saturdays and Sundays.
+#### 4. Run the application
+Run the application
+```bash
+streamlit run streamlit_app/streamlit_main.py
+```
+
 
 ---
 <br></br>
 
 
+
 ## Usage
 
-```python
-from python_project import pp
+After starting the Streamlit application, the user first fills in a short registration form with basic applicant details.
 
-result = pp.my_function()
-print(result)
-```
+The chatbot then opens a conversation interface where the candidate can:
 
-### Or run the CLI:
+- Describe their professional experience
+- Ask questions about the Python Developer role
+- Request to schedule an interview
+- Confirm or reject suggested interview slots
 
-```bash
-python main.py
-```
+The Main Agent manages each user turn and routes the conversation to the appropriate advisor:
+
+- `Info Advisor` for job-related questions
+- `Scheduling Advisor` for interview scheduling
+- `Exit Advisor` for detecting when the conversation should end
+
+The conversation ends when an interview is confirmed or when the candidate clearly asks to stop or is no longer interested.
 
 ---
 <br></br>

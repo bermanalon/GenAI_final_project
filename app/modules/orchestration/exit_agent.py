@@ -53,7 +53,12 @@ Rules:
 Implementation notes:
 - Use the full conversation history
 - Consider the conversation state
-- Do not assume END just because booking was confirmed
+- Scheduling is considered complete only when booking_confirmed = true.
+
+Priority:
+1. If the candidate opts out, asks to stop, or says they are no longer interested → END.
+2. Else, if booking_confirmed = false and the candidate is responding to proposed interview slots → CONTINUE.
+3. Else, decide using the normal END / CONTINUE criteria.
 """.strip(),
             ),
             ("system", "Conversation state:\n{conversation_state}"),

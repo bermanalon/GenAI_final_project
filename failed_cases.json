@@ -1,45 +1,89 @@
 [
   {
-    "conversation_id": 1,
+    "conversation_id": 2,
     "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?",
-    "assistant_message": "That sounds relevant for the role, especially with the data analysis background. The next step would be to schedule an interview.",
+    "expected": "continue",
+    "predicted": "schedule",
+    "input_recruiter_text": "Do you have any questions of your own?",
+    "assistant_message": "Thanks for sharing. I’d like to move you to the interview stage. The next available slots are:\n- 2026-05-01 09:00:00\n- 2026-05-01 10:00:00\n- 2026-05-01 11:00:00\n\nLet me know which one works for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
-        "content": "Thanks for applying to our Python Developer opening. What kinds of Python projects have you worked on recently?"
+        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
       },
       {
         "role": "user",
-        "content": "I've been using Python professionally for five years, mostly for data analysis."
+        "content": "I have three years' experience with Django and Flask."
       }
     ]
   },
   {
-    "conversation_id": 1,
-    "turn_id": 5,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "No problem. How about Thursday at 4 PM instead?",
-    "assistant_message": "No problem — what days or times tend to work better for you?",
+    "conversation_id": 3,
+    "turn_id": 3,
+    "expected": "continue",
+    "predicted": "schedule",
+    "input_recruiter_text": "How comfortable are you with SQL in addition to Python?",
+    "assistant_message": "Thanks for sharing — I'd like to move you to the interview stage. The next available slots are:\n- 2026-05-01 09:00:00\n- 2026-05-01 11:00:00\n- 2026-05-01 12:00:00\n\nLet me know which one works best for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
-        "content": "Thanks for applying to our Python Developer opening. What kinds of Python projects have you worked on recently?"
+        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
+      },
+      {
+        "role": "user",
+        "content": "Sure, I have four years of Python experience and two with SQL."
+      }
+    ]
+  },
+  {
+    "conversation_id": 3,
+    "turn_id": 7,
+    "expected": "end",
+    "predicted": "schedule",
+    "input_recruiter_text": "Great, your interview is confirmed. You'll receive a calendar invite shortly.",
+    "assistant_message": "Monday at 3:00 PM is not available. The next available interview slots are:\n- 2026-05-05 09:00:00\n- 2026-05-05 12:00:00\n- 2026-05-05 13:00:00\nLet me know which one you’d like.",
+    "chat_history_before_prediction": [
+      {
+        "role": "assistant",
+        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
+      },
+      {
+        "role": "user",
+        "content": "Sure, I have four years of Python experience and two with SQL."
+      },
+      {
+        "role": "assistant",
+        "content": "How comfortable are you with SQL in addition to Python?"
+      },
+      {
+        "role": "user",
+        "content": "Very comfortable, may I ask what technologies does the current stack use?"
+      },
+      {
+        "role": "assistant",
+        "content": "We currently deploy to AWS using Docker and ECS."
+      },
+      {
+        "role": "user",
+        "content": "I would like to set an appointment, does Monday at 3 PM is good."
+      }
+    ]
+  },
+  {
+    "conversation_id": 4,
+    "turn_id": 3,
+    "expected": "continue",
+    "predicted": "schedule",
+    "input_recruiter_text": "Are you also using SQL in addition to Python?",
+    "assistant_message": "Thanks — that background looks relevant. Here are the next available interview slots:\n- 2026-05-01 09:00:00\n- 2026-05-01 11:00:00\n- 2026-05-01 12:00:00\nLet me know which one works for you.",
+    "chat_history_before_prediction": [
+      {
+        "role": "assistant",
+        "content": "Hello! I saw your application for the Python Developer position—how long have you been working with Python?"
       },
       {
         "role": "user",
         "content": "I've been using Python professionally for five years, mostly for data analysis."
-      },
-      {
-        "role": "assistant",
-        "content": "Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?"
-      },
-      {
-        "role": "user",
-        "content": "I can't at that time—I'm busy."
       }
     ]
   },
@@ -49,7 +93,7 @@
     "expected": "schedule",
     "predicted": "continue",
     "input_recruiter_text": "Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?",
-    "assistant_message": "That sounds relevant for the role. How many years of experience do you have working with Python on backend services?",
+    "assistant_message": "Could you share how many years of experience you have with Python and which backend frameworks or databases you've used?",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -62,66 +106,12 @@
     ]
   },
   {
-    "conversation_id": 6,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?",
-    "assistant_message": "That sounds like a strong fit for the role. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
-      {
-        "role": "assistant",
-        "content": "Hello! I saw your application for the Python Developer position—how long have you been working with Python?"
-      },
-      {
-        "role": "user",
-        "content": "I've been using Python professionally for five years."
-      }
-    ]
-  },
-  {
-    "conversation_id": 7,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "How about an interview Monday at 3 PM or Tuesday at 11 AM?",
-    "assistant_message": "That sounds relevant for the role. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
-      {
-        "role": "assistant",
-        "content": "Hello! I saw your application for the Python Developer position—how long have you been working with Python?"
-      },
-      {
-        "role": "user",
-        "content": "I have three years' experience with Django and Flask."
-      }
-    ]
-  },
-  {
-    "conversation_id": 8,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?",
-    "assistant_message": "That sounds relevant for the role. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
-      {
-        "role": "assistant",
-        "content": "Hello! I saw your application for the Python Developer position—how long have you been working with Python?"
-      },
-      {
-        "role": "user",
-        "content": "I have three years' experience with Python."
-      }
-    ]
-  },
-  {
     "conversation_id": 8,
     "turn_id": 7,
     "expected": "schedule",
     "predicted": "end",
     "input_recruiter_text": "How about next Thursday?",
-    "assistant_message": "Thank you for letting us know, and I appreciate your time. Wishing you all the best, and feel free to reach out if your availability changes.",
+    "assistant_message": "Thank you for letting me know, and I appreciate your time. Wishing you all the best, and feel free to reach out if your availability changes.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -151,29 +141,11 @@
   },
   {
     "conversation_id": 9,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Our engineering manager can interview you Wednesday at 10 AM or Thursday at 2 PM. Which works best?",
-    "assistant_message": "That sounds relevant for the role, especially with the data analysis background. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
-      {
-        "role": "assistant",
-        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
-      },
-      {
-        "role": "user",
-        "content": "I've been using Python professionally for five years, mostly for data analysis."
-      }
-    ]
-  },
-  {
-    "conversation_id": 9,
     "turn_id": 5,
     "expected": "continue",
     "predicted": "schedule",
     "input_recruiter_text": "Great, your interview is confirmed. Sure, We're looking for a skilled Python Developer with expertise in Python 3 and experience working with frameworks such as Django, Flask, or FastAPI. The ideal candidate should be familiar with building RESTful APIs, working with SQL or NoSQL databases, and using version control systems like Git.",
-    "assistant_message": "The role involves building solutions aligned with business goals, working on data engineering problems, and building data pipelines. It also includes collaborating across teams to solve complex problems and writing clean, reusable, scalable Python code. I also see mentions of Pyramid, cloud platforms like AWS, GCP, or Azure, and some data science or machine learning knowledge as relevant. If you'd like, we can continue with scheduling after that.\n\nTuesday at 10:00 AM works — I’ve got that slot available.",
+    "assistant_message": "That time isn’t available. The next available slots on Tuesday are:\n- 2026-05-05 at 09:00:00\n- 2026-05-05 at 12:00:00\n- 2026-05-05 at 13:00:00\n\nThe role focuses on developing, testing, and maintaining high-quality software in Python, with work on data engineering problems and building data pipelines. It also involves collaborating across teams and contributing through the full software development lifecycle.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -199,7 +171,7 @@
     "expected": "schedule",
     "predicted": "continue",
     "input_recruiter_text": "I see, could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?",
-    "assistant_message": "Thanks for sharing. Have you worked on any Python projects using frameworks like Django, Flask, or Pyramid, or with SQL/NoSQL databases?",
+    "assistant_message": "Thanks for sharing. Based on what you've described, your experience is still quite limited for this position, which is looking for stronger hands-on Python background. I appreciate your interest and wish you the best in your search.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -220,12 +192,64 @@
     ]
   },
   {
-    "conversation_id": 11,
+    "conversation_id": 10,
     "turn_id": 7,
-    "expected": "schedule",
+    "expected": "end",
     "predicted": "continue",
-    "input_recruiter_text": "Great, Can we set up a meeting next Tuesday",
-    "assistant_message": "That sounds promising for the role. The next step would be to schedule an interview.",
+    "input_recruiter_text": "Fantastic. I've booked the interview—see you then!",
+    "assistant_message": "Monday at 3 PM works. Could you briefly share what Python projects or tasks you've worked on so far?",
+    "chat_history_before_prediction": [
+      {
+        "role": "assistant",
+        "content": "Hello! I saw your application for the Python Developer position—how long have you been working with Python?"
+      },
+      {
+        "role": "user",
+        "content": "I've been using Python for a couple of month, I don't have much experience in that area, but I'm eager to learn and quickly adapt."
+      },
+      {
+        "role": "assistant",
+        "content": "Could you elaborate on your experience with cloud platforms like AWS or GCP?"
+      },
+      {
+        "role": "user",
+        "content": "I've worked a bit with AWS, but I don't have experience with GCP yet."
+      },
+      {
+        "role": "assistant",
+        "content": "I see, could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?"
+      },
+      {
+        "role": "user",
+        "content": "Monday at 3 PM is good."
+      }
+    ]
+  },
+  {
+    "conversation_id": 11,
+    "turn_id": 3,
+    "expected": "continue",
+    "predicted": "schedule",
+    "input_recruiter_text": "Could you elaborate on your experience with cloud platforms like AWS?",
+    "assistant_message": "Thanks for sharing. I’d like to move you to the interview stage. The next available slots are:\n- 2026-05-01 at 09:00:00\n- 2026-05-01 at 11:00:00\n- 2026-05-01 at 12:00:00\n\nPlease let me know which one works for you.",
+    "chat_history_before_prediction": [
+      {
+        "role": "assistant",
+        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
+      },
+      {
+        "role": "user",
+        "content": "I have three years' experience with Pyhon and AWS."
+      }
+    ]
+  },
+  {
+    "conversation_id": 11,
+    "turn_id": 5,
+    "expected": "continue",
+    "predicted": "schedule",
+    "input_recruiter_text": "I see, the role focuses on building backend services in Python, mainly FastAPI.",
+    "assistant_message": "Thanks for the additional context. I’d like to move you to the interview stage. The next available slots are:\n- 2026-05-01 at 09:00:00\n- 2026-05-01 at 11:00:00\n- 2026-05-01 at 12:00:00\n\nPlease let me know which one works for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -242,14 +266,6 @@
       {
         "role": "user",
         "content": "I've worked a bit with AWS, mainly for deploying small apps and managing storage, but I'm still gaining experience and open to learning more."
-      },
-      {
-        "role": "assistant",
-        "content": "I see, the role focuses on building backend services in Python, mainly FastAPI."
-      },
-      {
-        "role": "user",
-        "content": "Sounds very interesting, I'm confident I can handle it"
       }
     ]
   },
@@ -259,7 +275,7 @@
     "expected": "end",
     "predicted": "schedule",
     "input_recruiter_text": "Great, your interview is confirmed. You'll receive a calendar invite shortly.",
-    "assistant_message": "Great — here are the next available times for a meeting:\n- 2026-04-26 at 11:00\n- 2026-04-26 at 17:00\n- 2026-04-27 at 09:00\n\nLet me know which one works best for you.",
+    "assistant_message": "Thanks — here are the next available interview slots:\n- 2026-05-01 at 09:00:00\n- 2026-05-01 at 11:00:00\n- 2026-05-01 at 12:00:00\n\nPlease let me know which one works for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -297,11 +313,11 @@
   },
   {
     "conversation_id": 12,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?",
-    "assistant_message": "That sounds relevant for the role. The next step would be to schedule an interview.",
+    "turn_id": 7,
+    "expected": "end",
+    "predicted": "schedule",
+    "input_recruiter_text": "Excellent, the slot is reserved. Looking forward to speaking with you!",
+    "assistant_message": "That time is not available. Here are the next available interview slots:\n- 2026-05-07 at 09:00:00\n- 2026-05-07 at 10:00:00\n- 2026-05-07 at 11:00:00\n\nLet me know which one works for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -310,6 +326,22 @@
       {
         "role": "user",
         "content": "Yes, 3 years' experience"
+      },
+      {
+        "role": "assistant",
+        "content": "Could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?"
+      },
+      {
+        "role": "user",
+        "content": "Those slots don't work for me."
+      },
+      {
+        "role": "assistant",
+        "content": "No problem. How about Thursday at 4 PM instead?"
+      },
+      {
+        "role": "user",
+        "content": "Wednesday at 10 AM works for me."
       }
     ]
   },
@@ -319,7 +351,7 @@
     "expected": "schedule",
     "predicted": "continue",
     "input_recruiter_text": "Could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?",
-    "assistant_message": "That sounds relevant for the role. Do you also have experience with Python frameworks like Django, Flask, or Pyramid, and roughly how many years have you been working with Python?",
+    "assistant_message": "Could you share how many years of Python experience you have and which frameworks you've used, such as Django or Flask?",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -333,29 +365,11 @@
   },
   {
     "conversation_id": 14,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "How about an interview Monday at 3 PM or Tuesday at 11 AM?",
-    "assistant_message": "That sounds relevant for the role. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
-      {
-        "role": "assistant",
-        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
-      },
-      {
-        "role": "user",
-        "content": "Sure, I have four years of Python experience."
-      }
-    ]
-  },
-  {
-    "conversation_id": 14,
-    "turn_id": 5,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Alright, would Wednesday at 1 PM work?",
-    "assistant_message": "No problem — could you share a few other times that work for you?",
+    "turn_id": 7,
+    "expected": "end",
+    "predicted": "schedule",
+    "input_recruiter_text": "Excellent, the slot is reserved. Looking forward to speaking with you!",
+    "assistant_message": "That time isn’t available. Here are the next 3 interview slots:\n- 2026-05-05 09:00:00\n- 2026-05-05 12:00:00\n- 2026-05-05 13:00:00\nLet me know which one works for you.",
     "chat_history_before_prediction": [
       {
         "role": "assistant",
@@ -372,24 +386,14 @@
       {
         "role": "user",
         "content": "I can't at that time—I'm busy."
-      }
-    ]
-  },
-  {
-    "conversation_id": 15,
-    "turn_id": 3,
-    "expected": "schedule",
-    "predicted": "continue",
-    "input_recruiter_text": "Could we schedule a chat this Friday at 11 AM or next Monday at 9 AM?",
-    "assistant_message": "That sounds like a strong fit for the role, especially with your ML background. The next step would be to schedule an interview.",
-    "chat_history_before_prediction": [
+      },
       {
         "role": "assistant",
-        "content": "Hi, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?"
+        "content": "Alright, would Wednesday at 1 PM work?"
       },
       {
         "role": "user",
-        "content": "I've been using Python professionally for five years, mostly for ML."
+        "content": "Tuesday at 10 AM works."
       }
     ]
   }
