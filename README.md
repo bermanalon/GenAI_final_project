@@ -197,45 +197,66 @@ The conversation ends when an interview is confirmed or when the candidate clear
 
 ## Screenshots
 
-<p float="left">
-  <img src="https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/e50214173218977.648c4882a75d6.gif"  width="400"/>
-</p>
+## Screenshots
 
+### Registration
+
+![Registration](assets/registration.png)
+
+### Conversation
+
+![Conversation](assets/conversation.png)
+
+### Confirmation
+
+![Confirmation](assets/confirmation.png)
 ---
 <br></br>
-
-
-## Code Examples
-
-```python
-import pandas as pd
-from openai import OpenAI
-
-client = OpenAI(api_key="your_api_key_here") # Replace with your actual API key or use environment variable
-
-# Load data
-df = pd.read_csv('data/dataset.csv')
-
-```
-
----
-<br></br>
-
 
 ## Project Structure
 
 ```text
-python-project/
-├── data/
-│   └── dataset.csv
-├── python_project/
-│   ├── __init__.py
-│   └── python_project.py
-├── tests/
-│   └── test.py
-├── main.py
+GenAI_final_project/
+├── .gitignore
+├── README.md
 ├── requirements.txt
-└── README.md
+├── .env.example
+├── sms_conversations.json
+├── db_Tech.sql
+├── Python Developer Job Description.pdf
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   └── modules/
+│       ├── __init__.py
+│       ├── orchestration/
+│       │   ├── __init__.py
+│       │   ├── main_agent.py
+│       │   ├── exit_agent.py
+│       │   ├── info_agent.py
+│       │   └── schedule_agent.py
+│       ├── scheduling/
+│       │   ├── __init__.py
+│       │   ├── schedule_db.py
+│       │   └── schedule_tools.py
+│       └── info/
+│           ├── __init__.py
+│           └── retriever.py
+│
+├── streamlit_app/
+│   ├── __init__.py
+│   └── streamlit_main.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── tests_main.py
+│   └── test_evals.ipynb
+│
+├── assets/
+│   ├── registration.png
+│   ├── conversation.png
+│   └── confirmation.png
 ```
 
 ---
