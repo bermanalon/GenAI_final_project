@@ -60,15 +60,80 @@ At each turn, the system selects one of three actions:
 - `SCHEDULE` – move toward booking an interview 
 - `END` – conclude the interaction 
 
-### Evaluation
+### Evaluation of routing decision
 
-The system is evaluated using a labeled dataset of real conversations, where each turn is annotated with the correct action (`continue`, `schedule`, `end`). 
+The project includes an evaluation process based on the labeled `sms_conversations.json` dataset.  
+Each labeled recruiter turn is mapped to one of three expected routing actions:
+
+- `continue`
+- `schedule`
+- `end`
+
+The `test_evals.ipynb` notebook prepares the dataset for OpenAI Evals, runs routing-decision evaluations, and analyzes results using accuracy and a confusion matrix.
+
+The routing prompt was improved iteratively using:
+- clearer decision rules
+- failed-case analysis
+- few-shot examples for borderline cases
+
+This process improved routing evaluation accuracy from 93.2% to 98.3%.
+
+### Exit Advisor Fine-Tuning
+
+The Exit Advisor is implemented as a fine-tuned classification model that determines whether a conversation should:
+
+- `CONTINUE`
+- `END`
+
+Fine-tuning was performed using labeled conversation data derived from the evaluation dataset. Each training example represents a conversation context and the correct exit decision.
+
+The fine-tuning process included:
+- Preparing a dataset of conversation states with corresponding labels  
+- Splitting the data into training and test sets  
+- Augmenting the dataset with additional edge cases to improve robustness  
+- Training a supervised fine-tuned model using the OpenAI API  
+
+The fine-tuned model improves performance in scenarios such as:
+- detecting candidate disengagement  
+- recognizing natural conversation closure after scheduling  
+- avoiding premature termination  
+
+The model was fine-tuned on top of a base GPT-4.1 model using supervised learning.
+The Exit Advisor is used at the beginning of each turn to determine whether the conversation should end before any further processing.
+
+### Full System Testing
+
+In addition to component-level evaluation, the project includes an end-to-end testing framework implemented in `tests/tests_main.py`.
+
+This script replays full multi-turn conversations from the labeled dataset and evaluates the behavior of the complete system, including all agents and orchestration logic.
+
+During testing:
+- The chatbot receives the full conversation history up to each turn  
+- Only candidate messages are introduced as new inputs  
+- Recruiter messages from the dataset are treated as ground truth labels and are not provided to the model ahead of time  
+- The system processes each turn using the full agent pipeline 
+- The predicted action (`continue`, `schedule`, `end`) is extracted from the conversation state  
+- Predictions are compared to the expected labels from the dataset
 
 Performance is measured using:
-- Accuracy 
-- Confusion Matrix 
+- Overall accuracy  
+- Confusion matrix  
 
-This project demonstrates how multi-agent orchestration, retrieval-augmented generation (RAG), and tool integration can be combined to build a realistic, goal-oriented conversational system.
+In addition, all mismatched predictions are recorded and saved to a `failed_cases.json` file, including:
+- conversation context  
+- expected vs. predicted actions  
+- assistant responses  
+
+This enables detailed analysis of failure cases such as:
+- premature scheduling decisions  
+- missed exit signals  
+- incorrect interpretation of candidate intent
+- but, also, good assistant behaviour that differs from the labeled data set due to different architecture/logic
+
+In fact, even if accuracy was 65%, detailed analysis of the chatbot behviour (analyzing the assistant messages in reference to the chat history and user input) shows that in all failed cases the behaviour was more than acceptable and in some of the cases even more human like than the labeled dataset.
+
+This end-to-end testing approach ensures that the integrated system behaves consistently and aligns with realistic recruiting scenarios.
+
 <br>
 
 <div style="background: #272822; color: #f8f8f2; padding: 10px; border-radius: 8px;">

@@ -1,3 +1,13 @@
+# tests/tests_main.py
+
+"""
+Evaluation script for the recruiting chatbot.
+
+Runs labeled conversations from sms_conversations.json through the chatbot,
+compares predicted actions against expected labels, and reports accuracy,
+confusion matrix, and failed cases. Failed cases are saved to failed_cases.json.
+"""
+
 import json
 from pathlib import Path
 
@@ -14,17 +24,29 @@ LABELS = ["continue", "schedule", "end"]
 
 
 def load_data():
+      """
+    Load labeled conversation data from JSON.
+    """
     with DATA_PATH.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def normalize_label(value):
+    """
+    Normalize labels for comparison.
+    """
     if not value:
         return None
     return str(value).strip().lower()
 
 
 def evaluate():
+    """
+    Run turn-level evaluation over labeled conversations.
+
+    Simulates the chatbot using candidate messages as input and compares
+    the chatbot's final action with the expected recruiter label.
+    """
     print("Starting evaluation...")
 
     agents = bootstrap_app()
@@ -46,6 +68,7 @@ def evaluate():
             expected = normalize_label(turn.get("label"))
             turn_id = turn.get("turn_id")
 
+            # Candidate turns are the inputs visible to the chatbot
             if speaker == "candidate":
                 chat_history.append({
                     "role": "user",
@@ -53,6 +76,7 @@ def evaluate():
                 })
                 continue
 
+            # Recruiter turns contain the expected action label for evaluation
             if speaker == "recruiter" and expected:
                 if not chat_history:
                     chat_history.append({
