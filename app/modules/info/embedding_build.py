@@ -3,13 +3,6 @@ Optional demo script for testing PDF embedding and retrieval.
 
 The actual app uses app/modules/info/retriever.py.
 
-This file is only for manual testing and learning.
-It follows the notebook-style approach:
-- OpenAI() directly
-- client.embeddings.create(...)
-- chromadb.Client()
-- collection.add(...)
-- collection.query(...)
 """
 
 from app.modules.info.retriever import build_context_text

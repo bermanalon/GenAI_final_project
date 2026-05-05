@@ -3,9 +3,11 @@ __pycache__/
 *.pyc
 .env
 .ipynb_checkpoints/
+.git/
 .DS_Store
 # Chroma / embeddings
 data/chroma_db/
 
 # Streamlit secrets
 .streamlit/secrets.toml
+failed_cases.json

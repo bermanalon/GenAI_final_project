@@ -3,42 +3,11 @@
 """
 Scheduling Advisor.
 
-Purpose:
-- Handle all interview scheduling interactions within the recruiting chatbot
-- Interpret candidate intent related to proposing, confirming, or modifying interview times
-- Use tool calling to:
-    - retrieve available slots
-    - validate requested slots
-    - book confirmed interviews
-
-Design:
-- Uses LangChain tool-calling agent with access to scheduling tools
-- Receives full conversation history via MessagesPlaceholder ("history")
-- Receives the latest user message separately as "input"
-- Returns structured JSON output for the main agent to consume
-
 Responsibilities:
-- Detect whether a scheduling action should be performed
-- Propose available time slots when needed
-- Validate and confirm candidate-selected slots
-- Book interviews when confirmation is clear
-- Handle partial scheduling + information requests via handoff_to="info"
-
-Output Contract:
-{
-  "decision": "SCHEDULE" or "NONE",
-  "assistant_message": "string",
-  "selected_slot": {"date": "...", "time": "..."} or null,
-  "offered_slots": [...],
-  "booking_confirmed": true/false,
-  "handoff_to": "info" or null,
-  "state_update": {...}
-}
-
-Notes:
-- "SCHEDULE" means active scheduling flow
-- "NONE" means no scheduling action should be taken in this turn
-- The main agent is responsible for orchestration and combining responses
+- Handle interview scheduling interactions
+- Propose, validate, and book interview slots via tools
+- Trigger handoff to Info Advisor when needed
+- Return structured results for the main agent
 """
 
 import json
@@ -106,6 +75,11 @@ def book(date: str, time: str):
 
 
 def build_schedule_advisor(model):
+    
+    """
+    Build the Scheduling Advisor agent with tool-calling capabilities.
+    """
+    
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", "Current date: {current_date}"),
@@ -299,9 +273,18 @@ OUTPUT FORMAT (JSON ONLY)
 
 
 def run_schedule_advisor(schedule_advisor, chat_history, state, handoff_context=None):
+    
+    """
+    Run the Scheduling Advisor for the current turn.
+
+    Returns:
+        dict: scheduling decision, message, slot data, state update and optional handoff to info advisor
+    """
+    
     user_message = get_last_user_message(chat_history)
     history_messages = convert_to_langchain_messages(chat_history[:-1])
 
+    # Call scheduling agent with full context
     response = schedule_advisor.invoke(
         {
             "input": user_message,
@@ -315,13 +298,14 @@ def run_schedule_advisor(schedule_advisor, chat_history, state, handoff_context=
 
     data = safe_parse(response.get("output", ""))
 
-    decision = data.get("decision", "NONE")
+    decision = data.get("decision", "NONE").upper()
     assistant_message = data.get("assistant_message", "").strip()
     selected_slot = data.get("selected_slot")
     offered_slots = data.get("offered_slots", [])
     booking_confirmed = data.get("booking_confirmed", False)
     handoff_to = data.get("handoff_to")
 
+    # Map advisor output into structured result + state update
     return {
         "decision": decision,
         "assistant_message": assistant_message,

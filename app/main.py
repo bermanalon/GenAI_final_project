@@ -1,7 +1,13 @@
 # app/main.py
 
 """
-Application entry point for the recruiting chatbot.
+Application bootstrap and entry layer.
+
+Responsibilities:
+- Load environment configuration
+- Initialize LLM models and advisor agents
+- Create initial session and conversation state
+- Expose the main processing function used by the UI
 """
 
 import os
@@ -15,6 +21,13 @@ from app.modules.orchestration.schedule_agent import build_schedule_advisor
 from app.modules.orchestration.info_agent import build_info_advisor
 
 def bootstrap_app():
+    """
+    Initialize models and build all agents.
+
+    Returns:
+        dict: Contains initialized agents used by the application.
+    """
+    
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -32,7 +45,8 @@ def bootstrap_app():
         api_key=api_key,
         temperature=0,
     )
-
+    
+    # Separate model for exit decision (fine-tuned)
     exit_decision_model = ChatOpenAI(
         model=exit_model_name,
         api_key=api_key,
@@ -42,12 +56,18 @@ def bootstrap_app():
     return {
         "main_agent": build_main_agent(general_model),
         "exit_advisor": build_exit_advisor(exit_decision_model),
-        "exit_message_model": general_model,
+        "exit_message_model": general_model,    # Generates polite closing text
         "schedule_advisor": build_schedule_advisor(general_model),
         "info_advisor": build_info_advisor(general_model),
     }
 
 def create_initial_session_state():
+    """
+    Create the initial session and conversation state.
+
+    Returns:
+        dict: Initial state used by the Streamlit app.
+    """
     return {
         "registration_submitted": False,
         "applicant_info": {},
@@ -86,6 +106,12 @@ def create_initial_session_state():
 
 
 def process_user_message(agents, applicant_info, chat_history, conversation_state):
+    """
+    Process a user message through the main agent orchestration.
+
+    Returns:
+        dict: Assistant response and updated conversation state.
+    """
     return run_main_agent(
         main_agent=agents["main_agent"],
         exit_advisor=agents["exit_advisor"],

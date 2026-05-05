@@ -21,13 +21,11 @@
 
 - [About The Project](#about-the-project)
 - [Features](#features)
+- [Architecture & Design](#architecture--design)
 - [Getting Started](#getting-started)
 - [Usage](#usage)
 - [Screenshots](#screenshots)
-- [Code Examples](#code-examples)
 - [Project Structure](#project-structure)
-- [To-Do List](#to-do-list)
-- [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
 - [Acknowledgments](#acknowledgments)
@@ -47,7 +45,7 @@ The chatbot simulates an SMS-based conversation (implemented via Streamlit for t
 - Progress the conversation toward scheduling an interview 
 - Politely end the conversation when appropriate 
 
-### Multi-Agent Architecture
+### System Overview
 
 The system is built using a **modular multi-agent design**, where a central orchestrator (Main Agent) collaborates with specialized advisor agents:
 
@@ -100,6 +98,123 @@ This project demonstrates how multi-agent orchestration, retrieval-augmented gen
 ---
 <br></br>
 
+## Architecture & Design
+
+### Architecture Overview
+
+The system is built as a multi-agent recruiting chatbot. A central Main Agent orchestrates the conversation and coordinates specialized advisor agents.
+
+The system operates around three high-level outcomes (continue, schedule, end).
+
+The architecture combines LLM-based reasoning with deterministic Python control logic. This hybrid approach ensures both flexibility in language understanding and reliability in system behavior.The agents decide what should happen, while the Python orchestration layer controls routing, state updates, tool execution, and final response construction.
+
+### Conversation Flow
+
+At each user turn, the system follows a structured decision flow:
+
+Main Agent  
+↓  
+Exit Advisor (first)  
+↓  
+Routing Decision (LLM)  
+↓  
+Primary Advisor (Info or Schedule)  
+↓  
+Optional Secondary Advisor (handoff)  
+↓  
+Final Response + State Update
+
+The Main Agent orchestrates the process. It first checks whether the conversation should end using the Exit Advisor. If not, it determines the appropriate route (continue or schedule) and invokes the relevant advisor.
+
+Advisors may optionally request a handoff to another advisor within the same turn. The Main Agent then combines the outputs and updates the conversation state accordingly.
+
+### Agent Roles
+
+The system is composed of a Main Agent and three specialized advisor agents.
+
+#### Main Agent
+- Orchestrates the conversation flow
+- Calls the Exit Advisor first
+- Decides routing (`continue` or `schedule`)
+- Invokes advisor agents
+- Combines responses and updates the conversation state
+
+#### Exit Advisor
+- Determines whether the conversation should end (`END` or `CONTINUE`)
+- Uses a fine-tuned model for classification
+- Generates a closing message when ending
+
+#### Scheduling Advisor
+- Handles interview scheduling interactions
+- Suggests available time slots
+- Validates user-proposed dates and times
+- Books interview slots
+- Uses database tools to access available interview slots
+
+#### Info Advisor
+- Answers candidate questions about the role
+- Uses Retrieval-Augmented Generation (RAG) over the job description (OpenAI embeddings, in-memory Chroma DB)
+- Assesses candidate relevance
+- Can trigger a handoff to scheduling when appropriate
+
+### Agent Contracts
+
+Each agent returns a structured output that is used by the Main Agent for orchestration.
+
+All agents follow a common structure:
+
+```json
+{
+  "decision": "...",
+  "assistant_message": "...",
+  "handoff_to": "...",        // optional
+  "handoff_context": "...",   // optional
+  "state_update": {...}
+}
+```
+
+### Decision Values per Agent
+
+- Exit Advisor: END | CONTINUE
+
+- Scheduling Advisor: SCHEDULE | NONE
+
+- Info Advisor: INFO | NONE
+
+- Main Agent (final): continue | schedule | end
+
+### Notes
+
+`assistant_message` is the natural language response shown to the user
+
+`handoff_to` allows an agent to request another advisor within the same turn
+
+`handoff_context` provides additional context for the receiving agent
+
+`state_update` contains partial updates to the shared conversation_state
+
+The full definition of the conversation state and update logic is available in:
+
+👉 `conversation_state_schema.md`
+
+### Conversation State
+
+The system maintains a shared `conversation_state` object that is used to coordinate the conversation between agents.
+
+The state tracks:
+- the current conversation status (`active`, `scheduling`, `scheduled`, `ended`)
+- the last action taken by the system
+- scheduling progress (offered slots, selected slot, booking status)
+- the last decisions made by each advisor
+
+The state is updated incrementally by agents using structured `state_update` outputs.  
+The Main Agent merges these updates after each turn.
+
+The conversation state is used for control flow and decision-making, while the full chat history is used for natural language understanding.
+
+👉 See `conversation_state_schema.md` for the full specification.
+
+---
 
 ##  Getting Started
 
@@ -194,9 +309,6 @@ The conversation ends when an interview is confirmed or when the candidate clear
 ---
 <br></br>
 
-
-## Screenshots
-
 ## Screenshots
 
 ### Registration
@@ -217,76 +329,72 @@ The conversation ends when an interview is confirmed or when the candidate clear
 
 ```text
 GenAI_final_project/
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── .env.example
-├── sms_conversations.json
-├── db_Tech.sql
-├── Python Developer Job Description.pdf
+├── .gitignore                     # Specifies files/folders ignored version coontrol
+├── README.md                      # Project documentation
+├── requirements.txt               # Python dependencies
+├── .Venv/                         # Virtual environment (ignored by Git)
+├── .env.example                   # Template for environment variables
+├── .env                           # Local environment variables (ignored by Git)
 │
-├── app/
-│   ├── __init__.py
-│   ├── main.py
-│   └── modules/
-│       ├── __init__.py
-│       ├── orchestration/
-│       │   ├── __init__.py
-│       │   ├── main_agent.py
-│       │   ├── exit_agent.py
-│       │   ├── info_agent.py
-│       │   └── schedule_agent.py
-│       ├── scheduling/
-│       │   ├── __init__.py
-│       │   ├── schedule_db.py
-│       │   └── schedule_tools.py
-│       └── info/
+├── sms_conversations.json         # Labeled dataset of conversations
+├── db_Tech.sql                    # SQL script to create interview slots database
+├── Python Developer Job Description.pdf  # Source document for RAG (Info Advisor)
+│
+├── app/                           # Core application logic
+│   ├── __init__.py                # Package initializer
+│   ├── main.py                    # Main backend entry point (called by Streamlit)
+│   │                              # Initializes system and processes user messages
+│   │
+│   └── modules/                   # Application modules
+│       ├── __init__.py            
+│       │
+│       ├── orchestration/         # Multi-agent orchestration layer
+│       │   ├── __init__.py        
+│       │   ├── main_agent.py      # Main orchestrator (decides: continue / schedule / end)
+│       │   ├── exit_agent.py      # Exit Advisor (END vs CONTINUE decision, fine-tuned)
+│       │   ├── info_agent.py      # Info Advisor (answers questions using RAG)
+│       │   └── schedule_agent.py  # Scheduling Advisor (handles interview scheduling logic employing tools to access the database)
+│       │
+│       ├── scheduling/            # Scheduling tools and database interaction
+│       │   ├── __init__.py        
+│       │   ├── schedule_db.py     # SQL Server access layer (queries, validation, booking)
+│       │   └── schedule_tools.py  # Function-calling tools exposed to the LLM
+│       │
+│       └── info/                  # Retrieval-Augmented Generation (RAG)
 │           ├── __init__.py
-│           └── retriever.py
+│           ├── retriever.py       # Chroma-based document retrieval from PDF embeddings
+│           └── embedding_build.py # Optional demo script for testing PDF embedding and retrieval
 │
-├── streamlit_app/
+├── streamlit_app/                 # User interface (Streamlit)
 │   ├── __init__.py
-│   └── streamlit_main.py
+│   └── streamlit_main.py          # Main Streamlit app (UI, chat loop, state management)
 │
-├── tests/
+├── tests/                         # Evaluation, testing, and fine-tuning artifacts
 │   ├── __init__.py
-│   ├── tests_main.py
-│   └── test_evals.ipynb
+│   ├── tests_main.py              # Automated evaluation runner (accuracy, confusion matrix)
+│   ├── test_evals.ipynb           # Notebook for evaluation and analysis of the routing performance
+│   │
+│   ├── routing_eval_dataset.jsonl # Dataset for evaluating routing decisions
+│   │                              # (continue / schedule / end classification)
+│   │
+│   ├── exit_advisor_training.jsonl           # Training dataset for Exit Advisor fine-tuning
+│   ├── exit_advisor_training_augmented.jsonl # Augmented training dataset (improved coverage)
+│   ├── exit_advisor_test.jsonl               # Test dataset for evaluating fine-tuned model
+│   │
+│   └── exit_finetune.ipynb       # Notebook for preparing data and running fine-tuning for the exit advisor model
 │
-├── assets/
-│   ├── registration.png
-│   ├── conversation.png
-│   └── confirmation.png
+├── assets/                        # Images used in README (screenshots)
+│   ├── registration.png          # Registration form screenshot
+│   ├── conversation.png          # Conversation example screenshot
+│   └── confirmation.png          # Booking confirmation screenshot
 ```
 
 ---
 <br></br>
 
-
-## To-Do List
-
-- [x] Initial project setup
-- [x] Add python_project module
-- [ ] Improve documentation
-- [ ] Add web interface
-
-
----
-<br></br>
-
-
-## Contributing
-
-Contributions are **welcome**! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-<br></br>
-
-
-
 ## License
 
-Distributed under the XXX License. See `LICENSE` for more information.
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 <br></br>
@@ -294,8 +402,9 @@ Distributed under the XXX License. See `LICENSE` for more information.
 
 ## Contact
 
-**Your Name** - [@yourtmail@gmail.com](yourmail@gmail.com)  
-Project Link: [https://github.com/yourusername/python-project](https://github.com/yourusername/python-project)
+Alon Berman   - [@berman.alon@gmail.com]
+
+Project Link: [https://github.com/bermanalon/GenAI_final_project]
 
 ---
 <br></br>
@@ -303,9 +412,15 @@ Project Link: [https://github.com/yourusername/python-project](https://github.co
 
 ## Acknowledgments
 
-- [Python](https://www.python.org/)
-- [Pandas](https://pandas.pydata.org/)
-- [OpenAI API](https://platform.openai.com/docs/overview)
+## Acknowledgments
 
+This project builds upon several tools and technologies that enabled rapid development and experimentation:
+
+- **Python** – core programming language used for the system 
+- **OpenAI API** – for LLM-based reasoning, embeddings, and fine-tuning capabilities  
+- **LangChain** – for lightweight agent orchestration and tool integration  
+- **Chroma** – for in-memory vector storage and retrieval in the RAG pipeline  
+- **Streamlit** – for building the interactive user interface  
+- **SQL Server** – for managing interview scheduling data  
 
 ---

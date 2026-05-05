@@ -1,5 +1,15 @@
 # app/modules/orchestration/main_agent.py
 
+"""
+Main Agent (orchestrator).
+
+Responsibilities:
+- Decide routing (continue / schedule / end)
+- Call advisor agents (exit, schedule, info)
+- Combine advisor outputs into a final response
+- Maintain and update conversation state
+"""
+
 from datetime import datetime, timezone
 
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
@@ -12,7 +22,7 @@ from app.modules.orchestration.schedule_agent import run_schedule_advisor
 from app.modules.orchestration.info_agent import run_info_advisor
 
 
-MEMORY_STORE = {}
+MEMORY_STORE = {}  # In-memory session history for routing agent
 MAX_ADVISOR_CALLS_PER_TURN = 2
 
 
@@ -23,6 +33,14 @@ def get_history(session_id):
 
 
 def build_main_agent(model):
+    
+    """
+    Build the routing main agent used to decide the next action.
+
+    Returns:
+        RunnableWithMessageHistory: routing agent
+    """
+    
     routing_instructions = """
 You are evaluating the routing decision of a recruiting chatbot.
 
@@ -86,6 +104,23 @@ def run_main_agent(
     chat_history,
     conversation_state,
 ):
+    """
+    Main orchestration flow for a single user turn.
+
+    Steps:
+    - Update state and log user input
+    - Check exit conditions
+    - Route to appropriate advisor (info / schedule)
+    - Handle optional advisor handoff
+    - Build final response and update state
+
+    Returns:
+        dict: assistant message, updated state, and end flag
+    """
+    
+    # applicant_info is currently not used by the agents,
+    # but kept for potential future personalization
+    
     state = dict(conversation_state)
 
     if not state.get("session_id"):
@@ -98,6 +133,7 @@ def run_main_agent(
     append_user_turn(state, user_message)
     state["turn_count"] = state.get("turn_count", 0) + 1
 
+    # First check if conversation should end
     exit_result = run_exit_advisor(
         exit_advisor=exit_advisor,
         exit_message_model=exit_message_model,
@@ -125,7 +161,8 @@ def run_main_agent(
         }
 
     route = get_main_route(main_agent, state, user_message)
-       
+    
+    # Prevent routing model from ending directly (exit handled separately only by exit advisor)   
     if route == "end":
         route = "continue"
 
@@ -150,6 +187,9 @@ def run_main_agent(
 
     advisor_calls += 1
     state = apply_state_update(state, primary_result.get("state_update", {}))
+
+    # Allow one additional advisor call if handoff is requested (used for user input
+    # that deals with both scheduling and job info)
 
     handoff_to = primary_result.get("handoff_to")
      
@@ -216,6 +256,11 @@ def run_main_agent(
     }   
 
 def get_main_route(main_agent, state, user_message):
+    
+    """
+    Use LLM to determine routing decision (continue / schedule / end).
+    """
+    
     try:
         response = main_agent.invoke(
             {
@@ -239,6 +284,11 @@ def get_main_route(main_agent, state, user_message):
 
 
 def build_final_message(primary_result, secondary_result):
+    
+    """
+    Combine primary and secondary advisor messages into final response.
+    """
+    
     parts = []
 
     primary_text = (primary_result or {}).get("assistant_message", "").strip()
@@ -254,6 +304,11 @@ def build_final_message(primary_result, secondary_result):
 
 
 def decide_final_label(route, primary_result, secondary_result, assistant_text):
+    
+    """
+    Determine final action label based on advisor results and booking status.
+    """
+    
     if not assistant_text:
         return "continue"
 
@@ -264,6 +319,7 @@ def decide_final_label(route, primary_result, secondary_result, assistant_text):
             booking_confirmed = True
             break
 
+    # If booking confirmed → may end conversation unless additional info is needed
     if booking_confirmed:
         handoff_to_info = any(
             result and result.get("handoff_to") == "info"

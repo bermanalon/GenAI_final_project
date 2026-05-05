@@ -17,6 +17,11 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 
 def build_exit_advisor(model):
+    
+    """
+    Build the Exit Advisor used to decide END vs CONTINUE.
+    """
+    
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -81,21 +86,19 @@ Priority:
     )
     
 def run_exit_advisor(exit_advisor, exit_message_model, chat_history, conversation_state):
+    
     """
-    Run the Exit Advisor.
+    Run the Exit Advisor for the current turn.
 
     Returns:
-    {
-        "decision": "END" or "CONTINUE",
-        "assistant_message": "...",
-        "state_update": {...}
-    }
+    dict: decision (END / CONTINUE), optional closing message, and state update
     """
 
     user_message = get_last_user_message(chat_history)
     history_messages = convert_to_langchain_messages(chat_history[:-1])
 
     try:
+        # Run fine-tuned model to decide END vs CONTINUE
         response = exit_advisor.invoke(
             {
                 "input": user_message,
@@ -110,6 +113,7 @@ def run_exit_advisor(exit_advisor, exit_message_model, chat_history, conversatio
 
     decision = raw_output if raw_output in ["END", "CONTINUE"] else "CONTINUE"
 
+    # If ending, generate a polite closing message
     if decision == "END":
         assistant_message = generate_exit_message(
             model=exit_message_model,
@@ -117,7 +121,7 @@ def run_exit_advisor(exit_advisor, exit_message_model, chat_history, conversatio
             conversation_state=conversation_state,
         )
         if not assistant_message:
-            assistant_message = assistant_message = "Thank you. Wishing you all the best."
+            assistant_message = "Thank you. Wishing you all the best."
     else:
         assistant_message = ""
 
@@ -162,6 +166,11 @@ def convert_to_langchain_messages(history):
     return messages
 
 def build_exit_message_prompt(chat_history, conversation_state):
+    
+    """
+    builds the prompt used to generate the final closing message when the conversation ends.
+    """
+    
     return f"""
 You are a recruiting assistant.
 

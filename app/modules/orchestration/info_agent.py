@@ -3,24 +3,11 @@
 """
 Info Advisor.
 
-Purpose:
-- Answer candidate questions about the role and process
-- Maintain engagement
-- Help move the conversation toward scheduling
-- Detect when the same user message also includes scheduling intent and
-  hand off to the Scheduling Advisor
-
-Design:
-- Uses the full conversation history via MessagesPlaceholder("history")
-- Receives the latest user message separately as "input"
-- Receives conversation state as additional context
-- Retrieves relevant job-description context from Chroma
-- Returns structured JSON for the main agent
-
-Current scope:
-- Uses RAG over the Python Developer Job Description PDF
-- Retrieves relevant chunks from an in-memory Chroma collection
-- Uses OpenAI embeddings with text-embedding-3-small
+Responsibilities:
+- Answer candidate questions using job-related context (RAG)
+- Assess candidate relevance
+- Guide conversation toward scheduling when appropriate
+- Trigger handoff to Scheduling Advisor when needed
 """
 
 import json
@@ -36,6 +23,11 @@ GENERIC_INFO_REPLY = (
 
 
 def build_info_advisor(model):
+    
+    """
+    Build the Info Advisor agent for question answering and conversation engagement.
+    """
+    
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -178,7 +170,16 @@ Output:
 
 
 def run_info_advisor(info_advisor, chat_history, state):
+    
+    """
+    Run the Info Advisor for the current turn.
+
+    Returns:
+        dict: decision, message, state update and optional handoff to scheduling
+    """
+    
     user_message = get_last_user_message(chat_history)
+    # Retrieve relevant job information (RAG)
     retrieved_context = build_context_text(user_message, k=3)
     history_messages = convert_to_langchain_messages(chat_history[:-1])
 
@@ -201,11 +202,12 @@ def run_info_advisor(info_advisor, chat_history, state):
         print("INFO AGENT ERROR:", repr(e))
         data = default_info_result()
 
-    decision = data.get("decision", "NONE")
+    decision = data.get("decision", "NONE").upper()
     handoff_context = data.get("handoff_context")
     assistant_message = data.get("assistant_message", "").strip()
     handoff_to = data.get("handoff_to")
 
+    # Ensure a minimal response if model returns empty output
     if decision == "INFO" and not assistant_message and not handoff_to:
         assistant_message = GENERIC_INFO_REPLY
 

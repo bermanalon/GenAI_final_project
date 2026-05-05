@@ -1,7 +1,12 @@
-# app/streamlit_main.py
+# streamlit_app/streamlit_main.py
 
 """
-Streamlit UI for the Recruiting Chatbot.
+Streamlit user interface for the recruiting chatbot.
+
+Responsibilities:
+- Render registration and chat screens
+- Store UI/session state
+- Send user messages to the backend orchestration layer
 """
 
 import os
@@ -39,6 +44,11 @@ st.markdown(
 )
 
 def initialize_session_state():
+    
+    """
+    Initialize Streamlit session state from the application defaults.
+    """
+    
     defaults = create_initial_session_state()
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -46,35 +56,15 @@ def initialize_session_state():
 
 
 def reset_app():
+    
+    """
+    Reset Streamlit session state to start a new conversation.
+    """
+    
     defaults = create_initial_session_state()
     st.session_state.clear()
     for key, value in defaults.items():
         st.session_state[key] = value
-
-def check_idle_timeout():
-    if not st.session_state.get("registration_submitted"):
-        return
-
-    last_activity = st.session_state.get("last_activity_at")
-    if not last_activity:
-        st.session_state.last_activity_at = datetime.now()
-        return
-
-    idle_time = datetime.now() - last_activity
-
-    if idle_time > timedelta(minutes=IDLE_TIMEOUT_MINUTES):
-        st.session_state.conversation_state["status"] = "ended"
-        st.session_state.conversation_state["last_action"] = "end"
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": (
-                "It looks like the conversation was inactive for a while, "
-                "so I’ll close it for now. You can start over whenever you’re ready."
-            ),
-        })
-
-        st.session_state.registration_submitted = True
 
 def validate_registration(first_name, last_name, email, phone_number):
     errors = []
@@ -103,6 +93,11 @@ def format_state(state):
 
 
 def render_registration_screen():
+    
+    """
+    Render the applicant registration form.
+    """
+    
     _, center_col, _ = st.columns([1, 1.7, 1])
 
     with center_col:
@@ -155,6 +150,11 @@ def render_registration_screen():
 
 
 def render_chat_screen(agents):
+    
+    """
+    Render the chat interface and process user input.
+    """
+    
     left_col, right_col = st.columns([2.2, 1], gap="medium")
 
     with left_col:
@@ -211,22 +211,14 @@ def render_chat_screen(agents):
 
             st.divider()
 
-#            state_value = st.session_state.conversation_state.get("status", "new")
-#            last_action = st.session_state.conversation_state.get("last_action", "none")
-
-#            st.write("**Current State**")
-#            st.write(format_state(state_value))
-#            st.write("**Last Action**")
-#            st.write(last_action)
-
             if st.session_state.end_session:
                 st.warning("Conversation ended")
 
-#            st.divider()
+            st.divider()
 
-#            if st.button("Start Over", use_container_width=True):
-#                reset_app()
-#                st.rerun()
+            if st.button("Start Over", use_container_width=True):
+                reset_app()
+                st.rerun()
 
 
 def main():
@@ -237,7 +229,6 @@ def main():
         st.stop()
 
     initialize_session_state()
-    check_idle_timeout()
     
     st.title("Recruitment Chatbot")
 
