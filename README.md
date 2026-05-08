@@ -6,12 +6,8 @@
 <h1 align="center">Recruitment Chatbot – Multi-Agent Orchestration</h1>
 
 <p align="center">
-  A Streamlit proof-of-concept for a multi-agent recruiting chatbot<br>
-  <a href="#demo">View Demo</a>
-  ·
-  <a href="#demo">Report Bug</a>
-  ·
-  <a href="#demo">Request Feature</a>
+  A Streamlit-based proof-of-concept for a multi-agent recruiting chatbot<br>
+
 </p>
 
 ---
@@ -40,14 +36,14 @@
 
 The chatbot simulates an SMS-based conversation (implemented via Streamlit for this PoC) and is responsible for guiding candidates through the recruitment process. Its main objectives are:
 
-- Collect and verify candidate information 
+- Collect and verify candidate information and relevance to the position
 - Answer questions about the role 
 - Progress the conversation toward scheduling an interview 
 - Politely end the conversation when appropriate 
 
 ### System Overview
 
-The system is built using a **modular multi-agent design**, where a central orchestrator (Main Agent) collaborates with specialized advisor agents:
+The system is built using a **multi-agent design**, where a central orchestrator (Main Agent) collaborates with specialized advisor agents:
 
 - **Main Agent** – Manages the conversation and decides the next action 
 - **Info Advisor** – Answers candidate questions using RAG over a job description PDF 
@@ -76,7 +72,7 @@ The routing prompt was improved iteratively using:
 - failed-case analysis
 - few-shot examples for borderline cases
 
-This process improved routing evaluation accuracy from 93.2% to 98.3%.
+This process improved routing evaluation accuracy from 94.9% to 98.3%.
 
 ### Exit Advisor Fine-Tuning
 
@@ -130,7 +126,7 @@ This enables detailed analysis of failure cases such as:
 - incorrect interpretation of candidate intent
 - but, also, good assistant behaviour that differs from the labeled data set due to different architecture/logic
 
-In fact, even if accuracy was 65%, detailed analysis of the chatbot behviour (analyzing the assistant messages in reference to the chat history and user input) shows that in all failed cases the behaviour was more than acceptable and in some of the cases even more human like than the labeled dataset.
+In fact, even if accuracy was 65%, in many of the failed cases, detailed analysis of the chatbot behavior (considering the full chat history and user input) shows that the responses are still reasonable and often aligned with realistic human-like recruiting interactions, despite differing from the labeled dataset. This may be attributed to a different architecture/logic of my chatbot versus the reference one.
 
 This end-to-end testing approach ensures that the integrated system behaves consistently and aligns with realistic recruiting scenarios.
 
@@ -153,12 +149,10 @@ This end-to-end testing approach ensures that the integrated system behaves cons
   - End conversation
 - Retrieval-Augmented Generation (RAG) for answering job-related questions
 - Interview scheduling via SQL Server (function calling)
-- Natural language date handling (e.g., "next Monday")
 - Fine-tuned Exit Advisor for conversation termination decisions
 - Streamlit-based interactive chat interface
 - Conversation state management across turns
-- Evaluation framework using labeled conversations (accuracy & confusion matrix)
-- Cloud deployment  
+- Evaluation framework using labeled conversations (accuracy & confusion matrix)  
 
 ---
 <br></br>
@@ -171,7 +165,7 @@ The system is built as a multi-agent recruiting chatbot. A central Main Agent or
 
 The system operates around three high-level outcomes (continue, schedule, end).
 
-The architecture combines LLM-based reasoning with deterministic Python control logic. This hybrid approach ensures both flexibility in language understanding and reliability in system behavior.The agents decide what should happen, while the Python orchestration layer controls routing, state updates, tool execution, and final response construction.
+The architecture combines LLM-based reasoning with deterministic Python control logic. This hybrid approach ensures both flexibility in language understanding and reliability in system behavior. The agents decide what should happen, while the Python orchestration layer controls routing, state updates, tool execution, and final response construction.
 
 ### Conversation Flow
 
@@ -288,14 +282,6 @@ The conversation state is used for control flow and decision-making, while the f
 - Python >= 3.12
 - pip
 
-## Live Demo
-
-You can access the deployed application to streamlit community cloud here:
-
-👉 https://genaifinalproject-mqr3xjd9xcr6ywglzoyz2n.streamlit.app/
-
-Note: Tech DB is deployed to Azure SQL, so connection on the first time can take longer
-
 ### Running the application on a Windows machine
 
 Follow these steps to run the application on a Windows machine, using a local SQL Server database created with SSMS.
@@ -369,7 +355,53 @@ The Main Agent manages each user turn and routes the conversation to the appropr
 - `Scheduling Advisor` for interview scheduling
 - `Exit Advisor` for detecting when the conversation should end
 
-The conversation ends when an interview is confirmed or when the candidate clearly asks to stop or is no longer interested.
+The conversation ends when an interview is confirmed or when the candidate asks to stop or is no longer interested.
+
+I added a start over button to the chat screen to allow easy start of a new conversation
+
+---
+<br></br>
+
+## Example Interaction
+
+Below is a short real example demonstrating how the chatbot interacts with a candidate and progresses toward scheduling an interview:
+
+**Recruiter:**  
+Hello Alon Berman, thanks for submitting your application for our Python Developer role. Could you share a bit about your Python experience?
+
+**Candidate:**  
+I have about 4 years of experience, mainly working with APIs and data processing.
+
+**Recruiter:**  
+Thanks for sharing — I’d like to move you to the interview stage. Here are the next available slots:  
+- 2026-05-08 at 10:00  
+- 2026-05-08 at 11:00  
+- 2026-05-08 at 12:00  
+Let me know which one works best for you.
+
+**Candidate:**  
+None of these slots works for me. What about next Wednesday?
+
+**Recruiter:**  
+I’m not seeing availability on Wednesday. The nearest available slots starting then are:  
+- 2026-05-14 at 10:00  
+- 2026-05-14 at 12:00  
+- 2026-05-14 at 15:00  
+Let me know which one you'd like.
+
+**Candidate:**  
+The third option works for me. Will I need to work with cloud systems?
+
+**Recruiter:**  
+Your interview is confirmed for 2026-05-14 at 15:00.  
+
+Yes — cloud platform knowledge is listed as a preferred qualification. The job description mentions AWS, Google Cloud, or Azure specifically.
+
+**Candidate:**  
+Thank you
+
+**Recruiter:**  
+You’re very welcome, Alon — your interview is confirmed for 2026-05-14 at 15:00. We look forward to speaking with you then.
 
 ---
 <br></br>
@@ -394,12 +426,13 @@ The conversation ends when an interview is confirmed or when the candidate clear
 
 ```text
 GenAI_final_project/
-├── .gitignore                     # Specifies files/folders ignored version coontrol
+├── .gitignore                     # Specifies files/folders ignored by version control
 ├── README.md                      # Project documentation
 ├── requirements.txt               # Python dependencies
+├── LICENSE                        # MIT License file
 ├── .Venv/                         # Virtual environment (ignored by Git)
 ├── .env.example                   # Template for environment variables
-├── .env                           # Local environment variables (ignored by Git)
+├── .env                           # Local environment variables like API KEY (ignored by Git)
 │
 ├── sms_conversations.json         # Labeled dataset of conversations
 ├── db_Tech.sql                    # SQL script to create interview slots database
@@ -418,7 +451,7 @@ GenAI_final_project/
 │       │   ├── main_agent.py      # Main orchestrator (decides: continue / schedule / end)
 │       │   ├── exit_agent.py      # Exit Advisor (END vs CONTINUE decision, fine-tuned)
 │       │   ├── info_agent.py      # Info Advisor (answers questions using RAG)
-│       │   └── schedule_agent.py  # Scheduling Advisor (handles interview scheduling logic employing tools to access the database)
+│       │   └── schedule_agent.py  # Scheduling Advisor (handles interview scheduling employing tools to access database)
 │       │
 │       ├── scheduling/            # Scheduling tools and database interaction
 │       │   ├── __init__.py        
@@ -467,15 +500,14 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 ## Contact
 
-Alon Berman   - [@berman.alon@gmail.com]
+Alon Berman   
+E-mail: berman.alon@gmail.com
 
 Project Link: [https://github.com/bermanalon/GenAI_final_project]
 
 ---
 <br></br>
 
-
-## Acknowledgments
 
 ## Acknowledgments
 

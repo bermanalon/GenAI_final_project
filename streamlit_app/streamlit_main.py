@@ -35,7 +35,7 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 1.2rem;
+        padding-top: 2rem;
         padding-bottom: 0.6rem;
     }
     </style>
@@ -161,7 +161,7 @@ def render_chat_screen(agents):
         with st.container(border=True):
             st.subheader("Conversation")
 
-            chat_area = st.container(height=420)
+            chat_area = st.container(height=380)
             with chat_area:
                 for msg in st.session_state.messages:
                     with st.chat_message(msg["role"]):
@@ -230,7 +230,7 @@ def main():
 
     initialize_session_state()
     
-    st.title("Recruitment Chatbot")
+    st.subheader("Recruitment Chatbot") 
 
     if not st.session_state.registration_submitted:
         render_registration_screen()
