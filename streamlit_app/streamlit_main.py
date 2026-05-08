@@ -102,7 +102,7 @@ def render_registration_screen():
 
     with center_col:
         with st.container(border=True):
-            st.subheader("Registration Form")
+            st.markdown("#### Registration Form")
             st.write("Please fill in your details for the Python Developer position.")
 
             with st.form("registration_form", enter_to_submit=False):
@@ -159,9 +159,9 @@ def render_chat_screen(agents):
 
     with left_col:
         with st.container(border=True):
-            st.subheader("Conversation")
+            st.markdown("#### Conversation")
 
-            chat_area = st.container(height=380)
+            chat_area = st.container(height=400)
             with chat_area:
                 for msg in st.session_state.messages:
                     with st.chat_message(msg["role"]):
@@ -203,7 +203,7 @@ def render_chat_screen(agents):
 
     with right_col:
         with st.container(border=True):
-            st.subheader("Applicant Info")
+            st.markdown("#### Applicant Info")
             st.write(f"**First Name:** {st.session_state.applicant_info.get('first_name', '')}")
             st.write(f"**Last Name:** {st.session_state.applicant_info.get('last_name', '')}")
             st.write(f"**Email:** {st.session_state.applicant_info.get('email', '')}")
