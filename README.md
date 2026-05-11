@@ -287,6 +287,8 @@ The conversation state is used for control flow and decision-making, while the f
 Follow these steps to run the application on a Windows machine, using a local SQL Server database created with SSMS.
 
 #### 1. Clone the repository and create virtual environment
+
+In a new folder, open new terminal (make sure that the terminal is in the new folder path):
 ```bash
 git clone https://github.com/bermanalon/GenAI_final_project.git
 cd GenAI_final_project
@@ -300,7 +302,7 @@ pip install -r requirements.txt
 
 ```
 #### 2. Configure environment variables
-Create a .env file based on the provided template:
+In terminal create a .env file based on the provided template:
 ```bash
 copy .env.example .env
 ```
@@ -315,7 +317,7 @@ DB_SERVER=your_sql_server
 DB_DATABASE=Tech
 ```
 #### 3. Create Tech Data base
-Run the following script in SSMS to create and populate the database:
+Open and run the following script in SSMS to create and populate the database:
 ```sql
 db_Tech.sql
 ```
@@ -326,8 +328,14 @@ UPDATE dbo.Schedule
 SET [date] = DATEADD(YEAR, 2, [date]);
 ```
 Note: it will cause scheduling slots to fall also on Saturdays and Sundays.
+
+Optional sanity test:
+```sql
+SELECT * FROM dbo.Schedule ORDER BY ScheduleID;
+GO
+```
 #### 4. Run the application
-Run the application
+In terminal run the application
 ```bash
 streamlit run streamlit_app/streamlit_main.py
 ```
